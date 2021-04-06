@@ -5,38 +5,37 @@ from core.config import Config
 import pytorch_lightning as pl
 from pytorch_lightning.loggers import TestTubeLogger
 
+import torch
 from torch.optim import Adam
 
 config = Config(
+    seed=3,
     alpha=100.0,
     models=VGG11s,
     n_clients=2,
     optimizer_client=Adam,
-    lr_server=0.0001,
+    lr_server=0.001,
     optimizer_server=Adam,
-    lr_client=0.0001
+    lr_client=0.001
 )
 
-logger = TestTubeLogger('.', create_git_tag=False)
+# Seeding everything
+pl.seed_everything(config.seed)
+
+
+#logger = TestTubeLogger('.', create_git_tag=False)
 
 clients = [config.models(role="client", id=i, **config) for i in range(config.n_clients)]
-server = [config.models(role="server", **config)]
+server = [config.models(role="client", **config)]
 
-#cifar = CIFAR10DataModule(alpha=0.01, parts=len(clients))
-stl = STL10DataModule()
+cifar = CIFAR10DataModule(**config)
 
-#print model
-server[0].summarize(mode="full")
-
-Pretrain(on=server, epochs=1, dataset=STL10DataModule)
-exit()
 Distribute_Dataset(to=clients, dataset=cifar, name="local", train=True, test=True)()
-Distribute_Dataset(to=server, dataset=cifar, name="local", test=True)()
-for i in range(3):
-    Train(on=clients, mode="local", epochs=1, logger=logger)()
+Distribute_Dataset(to=server, dataset=cifar, name="local", train=False, test=True)()
+for round in range(1):
+    Train(on=clients, mode="local", epochs=1)()
     Aggregate(source=clients, target=server, type='model')()
-    Distribute_Model(server[0], clients)
-    Test(on=server, logger=logger)()
-
+    Distribute_Model(source=server, target=clients)()
+    Test(on=server)()
 
 

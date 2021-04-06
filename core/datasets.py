@@ -82,19 +82,23 @@ class PublicDataset(pl.LightningDataModule):
             self.distill_data = Subset(train_data, idx[self.n_public: self.n_public+self.n_distill])
 
     def public_dataloader(self):
-        return DataLoader(self.public_data, batch_size=self.batch_size, num_workers=4)
+        return DataLoader(self.public_data, batch_size=self.batch_size, num_workers=4, shuffle=True, pin_memory=True)
+
+    @property
+    def num_public_samples(self):
+        return len(self.public_data)
 
     def distill_dataloader(self):
-        return DataLoader(self.distill_data, batch_size=self.batch_size, num_workers=4)
+        return DataLoader(self.distill_data, batch_size=self.batch_size, num_workers=4, shuffle=True, pin_memory=True)
 
 class LocalDataset(pl.LightningDataModule):
-    def __init__(self, data_dir: str = "datasets", batch_size: int = 32, split: str ='dirichlet', parts: int = 10, transforms=None, **split_kwargs):
+    def __init__(self, data_dir: str = "datasets", batch_size: int = 32, split: str ='dirichlet', n_clients: int = 10, transforms=None, **split_kwargs):
         super().__init__()
         self.data_dir = data_dir
         self.batch_size = batch_size
         self.transforms = transforms
         self.split = split
-        self.parts = parts
+        self.n_clients = n_clients
         self.split_kwargs = split_kwargs
         self._train_data = None
         self._test_data = None
@@ -105,7 +109,7 @@ class LocalDataset(pl.LightningDataModule):
             train_data = self.train_data()
             if self.split == "dirichlet":
                 self._train_data = [Subset(train_data, subset_idx) for subset_idx in
-                                   split_dirichlet(train_data.targets, self.parts, **self.split_kwargs)]
+                                   split_dirichlet(train_data.targets, n_clients=self.n_clients, **self.split_kwargs)]
             else:
                 self._train_data = train_data
 
@@ -114,11 +118,11 @@ class LocalDataset(pl.LightningDataModule):
 
 
     def train_dataloader(self, id=0):
-        assert id < self.parts
-        return DataLoader(self._train_data[id], batch_size=self.batch_size, shuffle=True, num_workers=4)
+        assert id < self.n_clients
+        return DataLoader(self._train_data[id], batch_size=self.batch_size, shuffle=True, num_workers=10, pin_memory=True)
 
     def test_dataloader(self):
-        return DataLoader(self._test_data, batch_size=self.batch_size, num_workers=4)
+        return DataLoader(self._test_data, batch_size=self.batch_size, num_workers=10, pin_memory=True)
 
 
 class CIFAR10DataModule(LocalDataset):
@@ -144,9 +148,8 @@ class STL10DataModule(PublicDataset):
                                                      torchvision.transforms.Normalize((0.4914, 0.4822, 0.4465),
                                                                                       (0.2023, 0.1994, 0.2010))
                                                      ])
-            super(STL10DataModule, self).__init__(transforms=transforms,**kwargs)
+            super(STL10DataModule, self).__init__(transforms=transforms, **kwargs)
         super(STL10DataModule, self).__init__(**kwargs)
 
     def train_data(self):
-        print("Downloading")
-        return torchvision.datasets.STL10(root=self.data_dir, split='unlabeled', folds=None, download=True, transform=self.transforms)
+        return torchvision.datasets.STL10(root=join(self.data_dir, 'STL10'), split='unlabeled', folds=None, download=True, transform=self.transforms)
