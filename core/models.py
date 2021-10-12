@@ -5,6 +5,7 @@ import pytorch_lightning as pl
 import numpy as np
 from collections import OrderedDict
 from pl_bolts.models.self_supervised import SimCLR
+from torchmetrics.classification.accuracy import Accuracy
 
 class Model(pl.LightningModule):
     def __init__(self, role , id=0,  **kwargs):
@@ -14,7 +15,7 @@ class Model(pl.LightningModule):
         self.datasets = {}
         self._mode = "local"
         self.id = id
-        self.accuracy = pl.metrics.Accuracy()
+        self.accuracy = Accuracy()
 
     def train_dataloader(self):
         if self._mode == "local":
@@ -44,6 +45,7 @@ class Model(pl.LightningModule):
             return self.classification_layer(features)
 
     def local_training(self, batch, batch_idx):
+        self.train()
         x, y = batch
         loss = F.cross_entropy(self(x), y)
         self.log(f'{self.role}_{self.id}/train_loss/local', loss, on_step=False, on_epoch=True)
@@ -63,14 +65,11 @@ class Model(pl.LightningModule):
         self.train()
         x, y = batch
         out = self.forward(x)
-        print(out)
         y_hat = torch.argmax(out, dim=1)
-        print(y_hat)
         self.accuracy(y_hat, y)
 
     def test_epoch_end(self, outputs):
         self.log('accuracy', self.accuracy.compute())
-
 
     def configure_optimizers(self):
         optimizer = self.kwargs[f"optimizer_{self.role}"](self.parameters(), lr=self.kwargs[f"lr_{self.role}"])
@@ -107,7 +106,7 @@ class VGG(Model):
             apply_gn(self)
 
 
-    def make_layers(self, cfg, batch_norm=False):
+    def make_layers(self, cfg, batch_norm=True):
         layers = []
         in_channels = 3
         for v in cfg:

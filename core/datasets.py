@@ -4,7 +4,8 @@ from os.path import join
 import numpy as np
 import pytorch_lightning as pl
 from torch.utils.data import DataLoader, Subset
-
+from typing import List
+from PIL import Image
 
 
 def split_dirichlet(labels, n_clients, alpha, double_stochstic=True, seed=0, **kwargs):
@@ -123,6 +124,16 @@ class LocalDataset(pl.LightningDataModule):
 
     def test_dataloader(self):
         return DataLoader(self._test_data, batch_size=self.batch_size, num_workers=10, pin_memory=True)
+
+class SyntheticAnomalyDataset(LocalDataset):
+    def __init__(self, anomaly_class_labels: List[int], data_dir: str = "datasets", batch_size: int = 32, split: str ='dirichlet', n_clients: int = 10, transforms=None, **split_kwargs):
+        super().__init__(data_dir=data_dir, batch_size=batch_size, split=split, n_clients=n_clients, transforms=transforms, **split_kwargs)
+        self.anomaly_class_labels = anomaly_class_labels
+
+    def setup(self, stage=None):
+        anomaly_data = Subset(self.train_data, self.train_data.targets)
+
+
 
 
 class CIFAR10DataModule(LocalDataset):

@@ -16,7 +16,8 @@ config = Config(
     optimizer_client=Adam,
     lr_server=0.001,
     optimizer_server=Adam,
-    lr_client=0.001
+    lr_client=0.001,
+    batch_size=32
 )
 
 # Seeding everything
@@ -32,10 +33,11 @@ cifar = CIFAR10DataModule(**config)
 
 Distribute_Dataset(to=clients, dataset=cifar, name="local", train=True, test=True)()
 Distribute_Dataset(to=server, dataset=cifar, name="local", train=False, test=True)()
-for round in range(1):
-    Train(on=clients, mode="local", epochs=1)()
-    Aggregate(source=clients, target=server, type='model')()
+for round in range(3):
     Distribute_Model(source=server, target=clients)()
+    Train(on=clients, mode="local", epochs=3)()
+    Aggregate(source=clients, target=server, type='model')()
+    Test(on=clients)()
     Test(on=server)()
 
 

@@ -4,6 +4,7 @@ import pytorch_lightning as pl
 from pl_bolts.datamodules import STL10DataModule
 from pl_bolts.models.self_supervised.simclr.transforms import SimCLRTrainDataTransform, SimCLREvalDataTransform
 from .models import ExtendedSimCLR
+from torch.optim.swa_utils import update_bn
 
 from os.path import join
 
@@ -22,15 +23,14 @@ def Distribute_Dataset(to, dataset, name, train=True, test=True):
 def Distribute_Model(source, target):
     def Distribute_Model2(message=None):
         for model in target:
-            for t_param, s_param in zip(model.parameters(), source[0].parameters()):
-                t_param.detach().copy_(s_param.detach())
+            model.load_state_dict(source[0].state_dict())
         return message
     return Distribute_Model2
 
 def Train(on, epochs, mode, logger=None):
     def Train2(message=None):
         for model in on:
-            pl.Trainer(max_epochs=epochs, logger=logger, weights_summary=None, gpus=1).fit(model.mode(mode))
+            pl.Trainer(max_epochs=epochs, logger=logger, weights_summary=None).fit(model.mode(mode))
         return message
     return Train2
 
@@ -50,17 +50,15 @@ def Pretrain(on, epochs, dataset, logger=None):
 def Test(on, logger=None):
     def Test2(message=None):
         for model in on:
-            pl.Trainer(logger=logger, gpus=1).test(model.mode("local"))
+            pl.Trainer(logger=logger).test(model.mode("local"))
         return message
     return Test2
 
 def Aggregate(source, target, type='model', method='Average'):
     def Aggregate2(message=None):
-        if type == 'model':
-            for target_model in target:
-                for t_param, s_params in zip(target_model.parameters(), zip(*[s.parameters() for s in source])):
-                    print(len(s_params))
-                    t_param.detach().copy_(torch.mean(torch.stack([s.detach() for s in s_params]),0))
+        for target_model in target:
+            for p_target, *p_source in zip(target_model.parameters(), *[model.parameters() for model in source]):
+                p_target.detach().copy_(torch.mean(torch.stack([p_model.detach() for p_model in p_source]), dim=0))
         return message
     return Aggregate2
 
