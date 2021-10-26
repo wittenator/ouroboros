@@ -125,11 +125,14 @@ venv.bak/
 .dmypy.json
 dmypy.json
 
-/datasets
-/.idea
 
 # Pyre type checker
 .pyre/
 
-# Huge files
-./datasets
+# Datasets and checkpoints
+datasets
+checkpoints
+
+# Code editors and IDEs
+.vscode
+.idea
