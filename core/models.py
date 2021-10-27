@@ -1,4 +1,10 @@
+from __future__ import annotations
+
+import numbers
+from abc import ABCMeta, abstractmethod
+
 import torch
+from sklearn.utils.validation import check_is_fitted
 from torch import nn
 import torch.nn.functional as F
 import pytorch_lightning as pl
@@ -7,15 +13,34 @@ from collections import OrderedDict
 from pl_bolts.models.self_supervised import SimCLR
 from torchmetrics.classification.accuracy import Accuracy
 
-class Model(pl.LightningModule):
-    def __init__(self, role , id=0,  **kwargs):
+from sklearn.mixture import BayesianGaussianMixture
+
+class AlgebraicMixin(metaclass=ABCMeta):
+
+    @abstractmethod
+    def set_additive_identity(self):
+        raise NotImplementedError(f"Setting to additive identity of {self.__name__} is not implemented")
+
+    @abstractmethod
+    def __add__(self, other):
+        raise NotImplementedError(f"Summation of {self.__name__} is not implemented")
+
+    @abstractmethod
+    def __mul__(self, other):
+        raise NotImplementedError(f"Scalar multiplication of {self.__name__} is not implemented")
+
+    @abstractmethod
+    def __rmul__(self, other):
+        raise NotImplementedError(f"Reverse scalar multiplication of {self.__name__} is not implemented")
+
+class Model(pl.LightningModule, AlgebraicMixin):
+    def __init__(self, role, id=0, **kwargs):
         super().__init__()
         self.role = role
         self.kwargs = kwargs
         self.datasets = {}
         self._mode = "local"
         self.id = id
-        self.accuracy = Accuracy()
 
     def train_dataloader(self):
         if self._mode == "local":
@@ -33,6 +58,15 @@ class Model(pl.LightningModule):
             return self.local_training(batch, batch_idx)
         elif self._mode == "distill":
             return self.distill_training(batch, batch_idx)
+
+    def mode(self, m):
+        self._mode = m
+        return self
+
+class NNModel(Model):
+    def __init__(self, role, id=0, **kwargs):
+        super().__init__(role, id=0, **kwargs)
+        self.accuracy = Accuracy()
 
     def extract_features(self, X):
         return torch.flatten(self.f(X), start_dim=1)
@@ -57,10 +91,6 @@ class Model(pl.LightningModule):
         self.log(f'{self.role}_{self.id}/train_loss/distill', loss, on_step=False, on_epoch=True)
         return loss
 
-    def mode(self, m):
-        self._mode = m
-        return self
-
     def test_step(self, batch, batch_idx):
         self.train()
         x, y = batch
@@ -75,10 +105,75 @@ class Model(pl.LightningModule):
         optimizer = self.kwargs[f"optimizer_{self.role}"](self.parameters(), lr=self.kwargs[f"lr_{self.role}"])
         return optimizer
 
+    def set_additive_identity(self) -> NNModel:
+        for param in self.parameters():
+            param.detach().copy_(torch.zeros_like(param))
+        return self
+
+    def __add__(self, other):
+        if isinstance(other, type(self)):
+            for p_target, p_source in zip(self.parameters(), other.parameters()):
+                p_target.detach().copy_(p_target.detach() + p_source.detach())
+        else:
+            raise NotImplementedError(f"Reverse addition is not implemented for {self.__name__}")
+        return self
+
+    def __rmul__(self, other: numbers.Number) -> NNModel:
+        if isinstance(other, numbers.Number):
+            for param in self.parameters():
+                param.detach().copy_(param.detach() * other)
+        else:
+            raise NotImplementedError(f"Reverse multiplication is not implemented for {self.__name__}")
+        return self
+
+    def __mul__(self, other):
+        return self.__rmul__(other)
+
+class MOG(Model):
+
+    def __init__(self, role, **kwargs):
+        super().__init__(role, **kwargs)
+        self.model = BayesianGaussianMixture()
+        self.l1 = nn.Linear(1, 1)
+
+    def forward(self, *args, **kwargs) -> Any:
+        pass
+
+    def training_step(self, batch, batch_idx):
+        if not hasattr(self.model, "weights_"):
+            data = np.concatenate([torch.flatten(x, start_dim=1).numpy() for (x,y) in self.train_dataloader()])
+            self.model.fit(data)
+
+        return torch.randn(1, requires_grad=True)
+
+    def configure_optimizers(self):
+        return torch.optim.Adam(self.parameters(), lr=0.02)
+
+    def set_additive_identity(self) -> MOG:
+        self.model.weights_ = None
+        self.model.means_ = None
+        self.model.covariances_ = None
+        return self
+
+    def __add__(self, other) -> MOG:
+        if isinstance(other, type(self)):
+            for attribute in ['weights_', 'means_', 'covariances_']:
+                if getattr(self.model, attribute, None) is None:
+                    setattr(self.model, attribute, getattr(other.model, attribute))
+                else:
+                    setattr(self.model, attribute, np.concatenate([getattr(o, attribute) for o in [self.model, other.model]]))
+        else:
+            raise NotImplementedError(f"Reverse addition is not implemented for {self.__name__}")
+        return self
+
+    def __rmul__(self, other: numbers.Number) -> MOG:
+        return self
+
+    def __mul__(self, other):
+        return self.__rmul__(other)
 
 
-
-class VGG(Model):
+class VGG(NNModel):
 
     def __init__(self, cfg, size=512, num_classes=10, group_norm=False, **kwargs):
         super(VGG, self).__init__(**kwargs)

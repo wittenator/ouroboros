@@ -1,4 +1,7 @@
-from core.models import VGG11s
+import operator
+from functools import reduce
+
+from core.models import VGG11s, MOG
 from core.datasets import CIFAR10DataModule, STL10DataModule
 from core.steps import Distribute_Dataset, Distribute_Model, Train, Pretrain, Test, Aggregate
 from core.config import Config
@@ -11,7 +14,7 @@ from torch.optim import Adam
 config = Config(
     seed=3,
     alpha=100.0,
-    models=VGG11s,
+    models=MOG,
     n_clients=2,
     optimizer_client=Adam,
     lr_server=0.001,
@@ -29,13 +32,14 @@ pl.seed_everything(config.seed)
 clients = [config.models(role="client", id=i, **config) for i in range(config.n_clients)]
 server = [config.models(role="client", **config)]
 
+
 cifar = CIFAR10DataModule(**config)
 
 Distribute_Dataset(to=clients, dataset=cifar, name="local", train=True, test=True)()
 Distribute_Dataset(to=server, dataset=cifar, name="local", train=False, test=True)()
-for round in range(3):
+for round in range(1):
     Distribute_Model(source=server, target=clients)()
-    Train(on=clients, mode="local", epochs=3)()
+    Train(on=clients, mode="local", epochs=1)()
     Aggregate(source=clients, target=server, type='model')()
     Test(on=clients)()
     Test(on=server)()

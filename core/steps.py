@@ -1,9 +1,13 @@
+import operator
+from functools import reduce
+from typing import List, Type
+
 import numpy as np
 import torch
 import pytorch_lightning as pl
 from pl_bolts.datamodules import STL10DataModule
 from pl_bolts.models.self_supervised.simclr.transforms import SimCLRTrainDataTransform, SimCLREvalDataTransform
-from .models import ExtendedSimCLR
+from .models import ExtendedSimCLR, AlgebraicMixin
 from torch.optim.swa_utils import update_bn
 
 from os.path import join
@@ -54,11 +58,11 @@ def Test(on, logger=None):
         return message
     return Test2
 
-def Aggregate(source, target, type='model', method='Average'):
+def Aggregate(source, target: List[Type[AlgebraicMixin]], type='model', method='Average'):
     def Aggregate2(message=None):
         for target_model in target:
-            for p_target, *p_source in zip(target_model.parameters(), *[model.parameters() for model in source]):
-                p_target.detach().copy_(torch.mean(torch.stack([p_model.detach() for p_model in p_source]), dim=0))
+            print(1.0/len(source))
+            target_model = 1.0/len(source) * reduce(operator.add, source, target_model.set_additive_identity())
         return message
     return Aggregate2
 
