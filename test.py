@@ -43,5 +43,6 @@ for round in range(1):
     Aggregate(source=clients, target=server, type='model')()
     Test(on=clients)()
     Test(on=server)()
+    print(server[0].model.sample())
 
 

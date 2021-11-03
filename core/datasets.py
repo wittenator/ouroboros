@@ -1,41 +1,45 @@
+from time import sleep
+
 import torch
 import torchvision
 from os.path import join
 import numpy as np
 import pytorch_lightning as pl
-from torch.utils.data import DataLoader, Subset
+from matplotlib import pyplot as plt
+from sklearn.datasets import make_blobs
+from torch.utils.data import DataLoader, Subset, TensorDataset
 from typing import List
 from PIL import Image
 
 
-def split_dirichlet(labels, n_clients, alpha, double_stochstic=True, seed=0, **kwargs):
+def split_dirichlet(labels, n_clients, alpha, double_stochstic=True, **kwargs):
     '''Splits data among the clients according to a dirichlet distribution with parameter alpha'''
-
-    np.random.seed(seed)
 
     if isinstance(labels, torch.Tensor):
         labels = labels.numpy()
-    n_classes = np.max(labels) + 1
+    classes = np.unique(labels)
+    n_classes = len(classes)
+
     label_distribution = np.random.dirichlet([alpha] * n_clients, n_classes)
 
     if double_stochstic:
-        label_distribution = make_double_stochstic(label_distribution)
+        label_distribution = make_double_stochastic(label_distribution)
 
     class_idcs = [np.argwhere(np.array(labels) == y).flatten()
-                  for y in range(n_classes)]
-
+                  for y in classes]
     client_idcs = [[] for _ in range(n_clients)]
     for c, fracs in zip(class_idcs, label_distribution):
+        print(fracs)
         for i, idcs in enumerate(np.split(c, (np.cumsum(fracs)[:-1] * len(c)).astype(int))):
             client_idcs[i] += [idcs]
 
     client_idcs = [np.concatenate(idcs) for idcs in client_idcs]
 
-    print_split(client_idcs, labels)
+    #print_split(client_idcs, labels)
 
     return client_idcs
 
-def make_double_stochstic(x):
+def make_double_stochastic(x):
     rsum = None
     csum = None
 
@@ -103,7 +107,6 @@ class LocalDataset(pl.LightningDataModule):
         self.split_kwargs = split_kwargs
         self._train_data = None
         self._test_data = None
-        self.setup()
 
     def setup(self, stage=None):
         if stage == 'fit' or stage is None:
@@ -131,9 +134,66 @@ class SyntheticAnomalyDataset(LocalDataset):
         self.anomaly_class_labels = anomaly_class_labels
 
     def setup(self, stage=None):
-        anomaly_data = Subset(self.train_data, self.train_data.targets)
+        train_data = self.train_data()
+        anomaly_class_binary_index = sum([train_data.targets == anomaly_class for anomaly_class in self.anomaly_class_labels]).numpy().astype(bool)
+        anomaly_class_index = np.where(anomaly_class_binary_index)[0]
 
+        local_data_class_index = np.where(~anomaly_class_binary_index)[0]
+        anomaly_class_index = np.random.choice(anomaly_class_index, size=int(len(local_data_class_index)*0.1))
+        if self.split == "dirichlet":
+            anomaly_data_iterator = zip(
+                split_dirichlet(train_data.targets[local_data_class_index], n_clients=self.n_clients, **self.split_kwargs),
+                split_dirichlet(train_data.targets[anomaly_class_index], n_clients=self.n_clients, **self.split_kwargs)
+            )
 
+            # reset the class labels for anomaly detection
+            train_data.targets = anomaly_class_binary_index.astype(int)
+
+            self._train_data = []
+            for subset_idx_local_data, subset_idx_global_anomalies in anomaly_data_iterator:
+                merged_idx = np.concatenate((local_data_class_index[subset_idx_local_data], anomaly_class_index[subset_idx_global_anomalies]))
+                client_subset = Subset(train_data, merged_idx)
+                self._train_data.append(client_subset)
+        else:
+            self._train_data = train_data
+
+class NumpyDataset(torch.utils.data.Dataset):
+    def __init__(self, X, y):
+        super().__init__()
+        self.data = X
+        self.targets = y
+
+    def __getitem__(self, item):
+        return self.data[item], self.targets[item]
+
+    def __len__(self):
+        return len(self.data)
+
+class GaussianBlobAnomalyDataset(SyntheticAnomalyDataset):
+    def __init__(self, anomaly_class_labels: List[int], data_dir: str = "datasets", batch_size: int = 32,
+                 split: str = 'dirichlet', n_clients: int = 10, transforms=None, **split_kwargs):
+        super().__init__(anomaly_class_labels=anomaly_class_labels, data_dir=data_dir, batch_size=batch_size, split=split, n_clients=n_clients,
+                         transforms=transforms, **split_kwargs)
+
+    def train_data(self):
+        X,y = make_blobs(n_samples=10000, centers=7)
+        return NumpyDataset(torch.from_numpy(X), torch.from_numpy(y))
+
+g = GaussianBlobAnomalyDataset(anomaly_class_labels=[1,2,3], alpha=0.01)
+g.setup()
+
+for dataset in g._train_data:
+    X,y = zip(*dataset)
+    X = torch.stack(X).numpy()
+
+    print(np.array(y)==1)
+
+    local = X[np.array(y)==0]
+    anomal = X[np.array(y)==1]
+
+    plt.scatter(local[:,0], local[:,1], marker='o', alpha=0.1)
+    plt.scatter(anomal[:, 0], anomal[:, 1], marker='x')
+    plt.show()
 
 
 class CIFAR10DataModule(LocalDataset):

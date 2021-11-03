@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import numbers
 from abc import ABCMeta, abstractmethod
+from typing import TypeVar, Generic, Any
 
 import torch
 from sklearn.utils.validation import check_is_fitted
@@ -15,22 +16,24 @@ from torchmetrics.classification.accuracy import Accuracy
 
 from sklearn.mixture import BayesianGaussianMixture
 
-class AlgebraicMixin(metaclass=ABCMeta):
+T = TypeVar('T')
+
+class AlgebraicMixin(Generic[T], metaclass=ABCMeta):
 
     @abstractmethod
-    def set_additive_identity(self):
+    def set_additive_identity(self) -> T:
         raise NotImplementedError(f"Setting to additive identity of {self.__name__} is not implemented")
 
     @abstractmethod
-    def __add__(self, other):
+    def __add__(self, other: T) -> T:
         raise NotImplementedError(f"Summation of {self.__name__} is not implemented")
 
     @abstractmethod
-    def __mul__(self, other):
+    def __mul__(self, other: numbers.Number) -> T:
         raise NotImplementedError(f"Scalar multiplication of {self.__name__} is not implemented")
 
     @abstractmethod
-    def __rmul__(self, other):
+    def __rmul__(self, other: numbers.Number) -> T:
         raise NotImplementedError(f"Reverse scalar multiplication of {self.__name__} is not implemented")
 
 class Model(pl.LightningModule, AlgebraicMixin):
