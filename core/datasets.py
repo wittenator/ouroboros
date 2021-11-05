@@ -29,7 +29,6 @@ def split_dirichlet(labels, n_clients, alpha, double_stochstic=True, **kwargs):
                   for y in classes]
     client_idcs = [[] for _ in range(n_clients)]
     for c, fracs in zip(class_idcs, label_distribution):
-        print(fracs)
         for i, idcs in enumerate(np.split(c, (np.cumsum(fracs)[:-1] * len(c)).astype(int))):
             client_idcs[i] += [idcs]
 
@@ -129,9 +128,11 @@ class LocalDataset(pl.LightningDataModule):
         return DataLoader(self._test_data, batch_size=self.batch_size, num_workers=10, pin_memory=True)
 
 class SyntheticAnomalyDataset(LocalDataset):
-    def __init__(self, anomaly_class_labels: List[int], data_dir: str = "datasets", batch_size: int = 32, split: str ='dirichlet', n_clients: int = 10, transforms=None, **split_kwargs):
+    def __init__(self, anomaly_class_labels: List[int], data_dir: str = "datasets", batch_size: int = 32, split: str ='dirichlet', n_clients: int = 10, transforms=None, local_alpha=100, anomaly_alpha=100,  **split_kwargs):
         super().__init__(data_dir=data_dir, batch_size=batch_size, split=split, n_clients=n_clients, transforms=transforms, **split_kwargs)
         self.anomaly_class_labels = anomaly_class_labels
+        self.local_alpha = local_alpha
+        self.anomaly_alpha = anomaly_alpha
 
     def setup(self, stage=None):
         train_data = self.train_data()
@@ -142,8 +143,8 @@ class SyntheticAnomalyDataset(LocalDataset):
         anomaly_class_index = np.random.choice(anomaly_class_index, size=int(len(local_data_class_index)*0.1))
         if self.split == "dirichlet":
             anomaly_data_iterator = zip(
-                split_dirichlet(train_data.targets[local_data_class_index], n_clients=self.n_clients, **self.split_kwargs),
-                split_dirichlet(train_data.targets[anomaly_class_index], n_clients=self.n_clients, **self.split_kwargs)
+                split_dirichlet(train_data.targets[local_data_class_index], n_clients=self.n_clients, alpha=self.local_alpha, **self.split_kwargs),
+                split_dirichlet(train_data.targets[anomaly_class_index], n_clients=self.n_clients, alpha=self.anomaly_alpha, **self.split_kwargs)
             )
 
             # reset the class labels for anomaly detection
@@ -179,10 +180,11 @@ class GaussianBlobAnomalyDataset(SyntheticAnomalyDataset):
         X,y = make_blobs(n_samples=10000, centers=7)
         return NumpyDataset(torch.from_numpy(X), torch.from_numpy(y))
 
-g = GaussianBlobAnomalyDataset(anomaly_class_labels=[1,2,3], alpha=0.01)
+g = GaussianBlobAnomalyDataset(anomaly_class_labels=[1,2,3], local_alpha=100, anomaly_alpha=0.01, n_clients=3)
 g.setup()
 
-for dataset in g._train_data:
+c = ['g', 'b', 'r']
+for i, dataset in enumerate(g._train_data):
     X,y = zip(*dataset)
     X = torch.stack(X).numpy()
 
@@ -191,9 +193,9 @@ for dataset in g._train_data:
     local = X[np.array(y)==0]
     anomal = X[np.array(y)==1]
 
-    plt.scatter(local[:,0], local[:,1], marker='o', alpha=0.1)
-    plt.scatter(anomal[:, 0], anomal[:, 1], marker='x')
-    plt.show()
+    plt.scatter(local[:,0], local[:,1], marker='o', alpha=0.1, c=c[i])
+    plt.scatter(anomal[:, 0], anomal[:, 1], marker='x', color=c[i])
+plt.show()
 
 
 class CIFAR10DataModule(LocalDataset):

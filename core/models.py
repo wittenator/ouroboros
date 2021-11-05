@@ -139,7 +139,7 @@ class MOG(Model):
         self.model = BayesianGaussianMixture()
         self.l1 = nn.Linear(1, 1)
 
-    def forward(self, *args, **kwargs) -> Any:
+    def forward(self, X) -> Any:
         pass
 
     def training_step(self, batch, batch_idx):

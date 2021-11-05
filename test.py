@@ -2,7 +2,7 @@ import operator
 from functools import reduce
 
 from core.models import VGG11s, MOG
-from core.datasets import CIFAR10DataModule, STL10DataModule
+from core.datasets import CIFAR10DataModule, STL10DataModule, GaussianBlobAnomalyDataset
 from core.steps import Distribute_Dataset, Distribute_Model, Train, Pretrain, Test, Aggregate
 from core.config import Config
 import pytorch_lightning as pl
@@ -20,7 +20,8 @@ config = Config(
     lr_server=0.001,
     optimizer_server=Adam,
     lr_client=0.001,
-    batch_size=32
+    batch_size=32,
+    anomaly_class_labels=[1,2,3]
 )
 
 # Seeding everything
@@ -33,7 +34,8 @@ clients = [config.models(role="client", id=i, **config) for i in range(config.n_
 server = [config.models(role="client", **config)]
 
 
-cifar = CIFAR10DataModule(**config)
+cifar = GaussianBlobAnomalyDataset(**config)
+cifar.setup()
 
 Distribute_Dataset(to=clients, dataset=cifar, name="local", train=True, test=True)()
 Distribute_Dataset(to=server, dataset=cifar, name="local", train=False, test=True)()
