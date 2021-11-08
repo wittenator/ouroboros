@@ -136,11 +136,13 @@ class MOG(Model):
 
     def __init__(self, role, **kwargs):
         super().__init__(role, **kwargs)
-        self.model = BayesianGaussianMixture()
+        self.model = BayesianGaussianMixture(n_components=5)
         self.l1 = nn.Linear(1, 1)
+        self.accuracy = Accuracy()
 
     def forward(self, X) -> Any:
-        pass
+        print(self.model.weight_concentration_)
+        return torch.from_numpy((np.exp(self.model.score_samples(X)) < 0.001).astype(int))
 
     def training_step(self, batch, batch_idx):
         if not hasattr(self.model, "weights_"):
@@ -148,6 +150,18 @@ class MOG(Model):
             self.model.fit(data)
 
         return torch.randn(1, requires_grad=True)
+
+    def test_step(self, batch, batch_idx):
+        self.train()
+        x, y = batch
+        out = self.forward(x)
+        print(out)
+        print(y)
+        print()
+        self.accuracy(out, y)
+
+    def test_epoch_end(self, outputs):
+        self.log('accuracy', self.accuracy.compute())
 
     def configure_optimizers(self):
         return torch.optim.Adam(self.parameters(), lr=0.02)
@@ -160,11 +174,21 @@ class MOG(Model):
 
     def __add__(self, other) -> MOG:
         if isinstance(other, type(self)):
-            for attribute in ['weights_', 'means_', 'covariances_']:
+            for attribute in ['weights_', 'means_', 'covariances_', 'degrees_of_freedom_', 'mean_precision_']:
+                print(attribute)
                 if getattr(self.model, attribute, None) is None:
                     setattr(self.model, attribute, getattr(other.model, attribute))
                 else:
                     setattr(self.model, attribute, np.concatenate([getattr(o, attribute) for o in [self.model, other.model]]))
+            self.model.precisions_cholesky_ = np.linalg.cholesky(self.model.covariances_)
+            self.model.weights_ = self.model.weights_ / self.model.weights_.sum()
+            if 'weight_concentration_' in self.model.__dict__:
+                #TODO: Need to think if the iterative normalization is problematic
+                self.model.weight_concentration_ = np.concatenate([self.model.weight_concentration_[0], other.model.weight_concentration_[0]])
+                self.model.weight_concentration_ = self.model.weight_concentration_ / self.model.weight_concentration_.sum()
+                self.model.weight_concentration_ = (self.model.weight_concentration_)
+            else:
+                self.model.weight_concentration_ = other.model.weight_concentration_
         else:
             raise NotImplementedError(f"Reverse addition is not implemented for {self.__name__}")
         return self

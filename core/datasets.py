@@ -141,22 +141,28 @@ class SyntheticAnomalyDataset(LocalDataset):
 
         local_data_class_index = np.where(~anomaly_class_binary_index)[0]
         anomaly_class_index = np.random.choice(anomaly_class_index, size=int(len(local_data_class_index)*0.1))
-        if self.split == "dirichlet":
-            anomaly_data_iterator = zip(
-                split_dirichlet(train_data.targets[local_data_class_index], n_clients=self.n_clients, alpha=self.local_alpha, **self.split_kwargs),
-                split_dirichlet(train_data.targets[anomaly_class_index], n_clients=self.n_clients, alpha=self.anomaly_alpha, **self.split_kwargs)
-            )
+        if stage == 'fit' or stage is None:
+            if self.split == "dirichlet":
+                anomaly_data_iterator = zip(
+                    split_dirichlet(train_data.targets[local_data_class_index], n_clients=self.n_clients, alpha=self.local_alpha, **self.split_kwargs),
+                    split_dirichlet(train_data.targets[anomaly_class_index], n_clients=self.n_clients, alpha=self.anomaly_alpha, **self.split_kwargs)
+                )
 
-            # reset the class labels for anomaly detection
-            train_data.targets = anomaly_class_binary_index.astype(int)
+                # reset the class labels for anomaly detection
+                train_data.targets = anomaly_class_binary_index.astype(int)
 
-            self._train_data = []
-            for subset_idx_local_data, subset_idx_global_anomalies in anomaly_data_iterator:
-                merged_idx = np.concatenate((local_data_class_index[subset_idx_local_data], anomaly_class_index[subset_idx_global_anomalies]))
-                client_subset = Subset(train_data, merged_idx)
-                self._train_data.append(client_subset)
-        else:
-            self._train_data = train_data
+                self._train_data = []
+                for subset_idx_local_data, subset_idx_global_anomalies in anomaly_data_iterator:
+                    merged_idx = np.concatenate((local_data_class_index[subset_idx_local_data], anomaly_class_index[subset_idx_global_anomalies]))
+                    client_subset = Subset(train_data, merged_idx)
+                    self._train_data.append(client_subset)
+                    print(1)
+            else:
+                self._train_data = train_data
+
+        if stage == 'test' or stage is None:
+            self._test_data = self.train_data()
+            self._test_data.targets = anomaly_class_binary_index.astype(int)
 
 class NumpyDataset(torch.utils.data.Dataset):
     def __init__(self, X, y):
@@ -180,22 +186,7 @@ class GaussianBlobAnomalyDataset(SyntheticAnomalyDataset):
         X,y = make_blobs(n_samples=10000, centers=7)
         return NumpyDataset(torch.from_numpy(X), torch.from_numpy(y))
 
-g = GaussianBlobAnomalyDataset(anomaly_class_labels=[1,2,3], local_alpha=100, anomaly_alpha=0.01, n_clients=3)
-g.setup()
 
-c = ['g', 'b', 'r']
-for i, dataset in enumerate(g._train_data):
-    X,y = zip(*dataset)
-    X = torch.stack(X).numpy()
-
-    print(np.array(y)==1)
-
-    local = X[np.array(y)==0]
-    anomal = X[np.array(y)==1]
-
-    plt.scatter(local[:,0], local[:,1], marker='o', alpha=0.1, c=c[i])
-    plt.scatter(anomal[:, 0], anomal[:, 1], marker='x', color=c[i])
-plt.show()
 
 
 class CIFAR10DataModule(LocalDataset):

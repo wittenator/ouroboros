@@ -34,11 +34,11 @@ clients = [config.models(role="client", id=i, **config) for i in range(config.n_
 server = [config.models(role="client", **config)]
 
 
-cifar = GaussianBlobAnomalyDataset(**config)
-cifar.setup()
+g = GaussianBlobAnomalyDataset(anomaly_class_labels=[1,2], local_alpha=0.01, anomaly_alpha=100, n_clients=3)
+g.setup()
 
-Distribute_Dataset(to=clients, dataset=cifar, name="local", train=True, test=True)()
-Distribute_Dataset(to=server, dataset=cifar, name="local", train=False, test=True)()
+Distribute_Dataset(to=clients, dataset=g, name="local", train=True, test=True)()
+Distribute_Dataset(to=server, dataset=g, name="local", train=False, test=True)()
 for round in range(1):
     Distribute_Model(source=server, target=clients)()
     Train(on=clients, mode="local", epochs=1)()
