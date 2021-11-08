@@ -36,3 +36,11 @@ sudo apt install zlib1g-dev libjpeg9-dev python3.8-dev
 ```
 
 Now you can start any Python script in the virtual environment provided by Poetry, by pre-pending all commands with `poetry run`, e.g., `poetry run python test.py`.
+
+Alternatively, an Anaconda environment is provided, which can be installed using `conda env create -f environment.yml`. To use the environment it must be activate first. After using the environment it has to be deactivated:
+
+```bash
+conda activate ouroboros
+python test.py
+conda deactivate
+```
