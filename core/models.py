@@ -13,6 +13,7 @@ import numpy as np
 from collections import OrderedDict
 from pl_bolts.models.self_supervised import SimCLR
 from torchmetrics.classification.accuracy import Accuracy
+from torchmetrics import MeanSquaredError
 
 from sklearn.mixture import BayesianGaussianMixture
 
@@ -199,7 +200,6 @@ class MOG(Model):
     def __mul__(self, other):
         return self.__rmul__(other)
 
-
 class VGG(NNModel):
 
     def __init__(self, cfg, size=512, num_classes=10, group_norm=False, **kwargs):
@@ -246,7 +246,6 @@ class VGG(NNModel):
 def VGG11s(num_classes=10, **kwargs):
     return VGG([32, 'M', 64, 'M', 128, 128, 'M', 128, 128, 'M', 128, 128, 'M'], size=128, num_classes=num_classes, **kwargs)
 
-
 def flatten(source):
     return torch.cat([value.flatten() for value in source.values()])
 
@@ -260,3 +259,73 @@ class ExtendedSimCLR(SimCLR):
 
     def forward(self, x):
         return self.encoder(x)
+
+class Autoencoder(Model):
+
+    def __init__(self, role, input_size=2, embedding_size=2, threshold=0.1, id=0, **kwargs):
+        super().__init__(role, id=0, **kwargs)
+
+        self.threshold = threshold
+
+        self.encoder = torch.nn.Sequential(
+            torch.nn.Linear(input_size, embedding_size)
+        )
+        self.decoder = torch.nn.Sequential(
+            torch.nn.Linear(embedding_size, input_size)
+        )
+
+        self.accuracy = Accuracy()
+        self.mse = MeanSquaredError()
+
+    def extract_features(self, X):
+        return self.encoder(X.type(torch.float))
+
+    def forward(self, X):
+        return self.decoder(self.encoder(X.type(torch.float)))
+
+    def local_training(self, batch, batch_idx):
+        self.train()
+        x, y = batch
+        loss = F.mse_loss(self(x.type(torch.float)), x.type(torch.float))
+        self.log(f'{self.role}_{self.id}/train_loss/local', loss, on_step=False, on_epoch=True)
+        return loss
+
+    def test_step(self, batch, batch_idx):
+        self.train()
+        x, y = batch
+        out = self(x.type(torch.float))
+        y_hat = (out - x.type(torch.float)).abs().sum(axis=1) >= self.threshold
+        self.accuracy(y_hat, y)
+        self.mse(out.flatten(), x.flatten())
+
+    def test_epoch_end(self, outputs):
+        self.log('accuracy', self.accuracy.compute())
+        self.log('mse', self.mse.compute())
+
+    def configure_optimizers(self):
+        optimizer = self.kwargs[f"optimizer_{self.role}"](self.parameters(), lr=self.kwargs[f"lr_{self.role}"])
+        return optimizer
+
+    def set_additive_identity(self) -> NNModel:
+        for param in self.parameters():
+            param.detach().copy_(torch.zeros_like(param))
+        return self
+
+    def __add__(self, other):
+        if isinstance(other, type(self)):
+            for p_target, p_source in zip(self.parameters(), other.parameters()):
+                p_target.detach().copy_(p_target.detach() + p_source.detach())
+        else:
+            raise NotImplementedError(f"Reverse addition is not implemented for {self.__name__}")
+        return self
+
+    def __rmul__(self, other: numbers.Number) -> NNModel:
+        if isinstance(other, numbers.Number):
+            for param in self.parameters():
+                param.detach().copy_(param.detach() * other)
+        else:
+            raise NotImplementedError(f"Reverse multiplication is not implemented for {self.__name__}")
+        return self
+
+    def __mul__(self, other):
+        return self.__rmul__(other)
