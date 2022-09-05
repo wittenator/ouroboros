@@ -10,7 +10,15 @@ from sklearn.datasets import make_blobs
 from torch.utils.data import DataLoader, Subset, TensorDataset
 from typing import List
 from PIL import Image
+from dataclasses import dataclass
 
+@dataclass
+class Participant:
+    """Class for keeping track of an item in inventory."""
+    model: nn.Module
+    group: Any
+    id: Any = None
+    datasets: dict = {}
 
 def split_dirichlet(labels, n_clients, alpha, double_stochstic=True, **kwargs):
     '''Splits data among the clients according to a dirichlet distribution with parameter alpha'''
@@ -34,7 +42,7 @@ def split_dirichlet(labels, n_clients, alpha, double_stochstic=True, **kwargs):
 
     client_idcs = [np.concatenate(idcs) for idcs in client_idcs]
 
-    #print_split(client_idcs, labels)
+    print_split(client_idcs, labels)
 
     return client_idcs
 
@@ -108,16 +116,7 @@ class LocalDataset(pl.LightningDataModule):
         self._test_data = None
 
     def setup(self, stage=None):
-        if stage == 'fit' or stage is None:
-            train_data = self.train_data()
-            if self.split == "dirichlet":
-                self._train_data = [Subset(train_data, subset_idx) for subset_idx in
-                                   split_dirichlet(train_data.targets, n_clients=self.n_clients, **self.split_kwargs)]
-            else:
-                self._train_data = train_data
 
-        if stage == 'test' or stage is None:
-            self._test_data = self.test_data()
 
 
     def train_dataloader(self, id=0):
@@ -175,16 +174,6 @@ class NumpyDataset(torch.utils.data.Dataset):
 
     def __len__(self):
         return len(self.data)
-
-class GaussianBlobAnomalyDataset(SyntheticAnomalyDataset):
-    def __init__(self, anomaly_class_labels: List[int], data_dir: str = "datasets", batch_size: int = 32,
-                 split: str = 'dirichlet', n_clients: int = 10, transforms=None, **split_kwargs):
-        super().__init__(anomaly_class_labels=anomaly_class_labels, data_dir=data_dir, batch_size=batch_size, split=split, n_clients=n_clients,
-                         transforms=transforms, **split_kwargs)
-
-    def train_data(self):
-        X,y = make_blobs(n_samples=10000, centers=7)
-        return NumpyDataset(torch.from_numpy(X), torch.from_numpy(y))
 
 
 

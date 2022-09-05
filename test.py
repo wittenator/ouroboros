@@ -1,50 +1,35 @@
-import operator
-from functools import reduce
-
-from core.models import VGG11s, MOG
-from core.datasets import CIFAR10DataModule, STL10DataModule, GaussianBlobAnomalyDataset
-from core.steps import Distribute_Dataset, Distribute_Model, Train, Pretrain, Test, Aggregate
-from core.config import Config
-import pytorch_lightning as pl
-from pytorch_lightning.loggers import TestTubeLogger
-
 import torch
-from torch.optim import Adam
+import torchvision
+from ouroboros.utils import Participant
+from ouroboros.steps import Distribute_Dataset
 
-config = Config(
-    seed=3,
-    alpha=100.0,
-    models=MOG,
-    n_clients=2,
-    optimizer_client=Adam,
-    lr_server=0.001,
-    optimizer_server=Adam,
-    lr_client=0.001,
-    batch_size=32,
-    anomaly_class_labels=[1,2,3]
+transforms = torchvision.transforms.Compose([
+                                    torchvision.transforms.ToTensor(),
+                                    torchvision.transforms.Normalize((0.4914, 0.4822, 0.4465),
+                                                        (0.2023, 0.1994, 0.2010))
+                                    ])
+train_data = torchvision.datasets.CIFAR10(root='./cifar10', train=True, download=True, transform=transforms)
+test_data = torchvision.datasets.CIFAR10(root='./cifar10', train=False, download=True, transform=transforms)
+
+server = Participant(
+    model = torchvision.models.vgg11(),
+    group = 'server',
+    id = 1,
 )
 
-# Seeding everything
-pl.seed_everything(config.seed)
+clients = [
+    Participant(
+        model = torchvision.models.vgg11(),
+        group = 'client',
+        id = i,
+    ) for i in range(5)
+]
 
-
-#logger = TestTubeLogger('.', create_git_tag=False)
-
-clients = [config.models(role="client", id=i, **config) for i in range(config.n_clients)]
-server = [config.models(role="client", **config)]
-
-
-g = GaussianBlobAnomalyDataset(anomaly_class_labels=[1,2], local_alpha=0.01, anomaly_alpha=100, n_clients=3)
-g.setup()
-
-Distribute_Dataset(to=clients, dataset=g, name="local", train=True, test=True)()
-Distribute_Dataset(to=server, dataset=g, name="local", train=False, test=True)()
-for round in range(1):
-    Distribute_Model(source=server, target=clients)()
-    Train(on=clients, mode="local", epochs=1)()
-    Aggregate(source=clients, target=server, type='model')()
-    Test(on=clients)()
-    Test(on=server)()
-    print(server[0].model.sample())
-
+Distribute_Dataset(
+    to = clients,
+    dataset = train_data,
+    name = 'train',
+    split = 'dirichlet',
+    alpha = 0.1
+)
 
