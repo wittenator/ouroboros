@@ -1,6 +1,6 @@
+from inspect import isclass
 import operator
-from pyexpat import model
-from typing import List, Type
+from typing import Iterable, List, Type
 
 import numpy as np
 import torch
@@ -8,9 +8,14 @@ from torch.utils.data import Subset
 from torch import nn
 from tqdm import tqdm, trange
 
+from core.aggregator import FederatedAveraging, ModelConsolidationStrategy
+
 from .utils import split_dirichlet
 
 def Distribute_Dataset(to, dataset, name, split, **split_kwargs):
+
+    if not isinstance(to, Iterable):
+        to = [to]
 
     if split == "dirichlet":
         split_dataset = [Subset(dataset, subset_idx) for subset_idx in
@@ -27,28 +32,37 @@ def Distribute_Model(source, target):
     assert all([issubclass(target_model, torch.nn.Module) for target_model in target]), "The target must be a sequence of Pytorch models which has a load_state_dict() function"
 
     for model in target:
-        model.load_state_dict(source.state_dict())
+        model.load_state_dict(source.state_dict())  # type: ignore
 
-def Train(on, epochs, device, logger=None):
+def Train(on, epochs, device, batch_size, logger=None):
     for participant in on:
         trainer_instance = participant.trainer(
             model = participant.model,
             device = device,
             dataset = participant.datasets["train"],
-            batch_size = 16
+            batch_size = batch_size
         )
         for epoch in trange(epochs):
             epoch_acc = trainer_instance.train_for_one_epoch()
             print(epoch_acc)
 
-def Test(on, tester, logger=None):
-    for model in on:
-        Tester(logger=logger).test(model)
+def Validate(on, device, batch_size, logger=None):
 
-def Aggregate(source, target, aggregator):
+    if not isinstance(on, Iterable):
+        on = [on]
 
-    for target_model in target:
-        target_model = 1.0/len(source) * reduce(operator.add, source, target_model.set_additive_identity())
+    for participant in on:
+        acc = participant.validator(
+            model = participant.model,
+            device = device,
+            dataset = participant.datasets["validate"],
+            batch_size = batch_size
+        ).validate()
+
+        print(acc)
+
+def Aggregate(sources, target, aggregator: ModelConsolidationStrategy):
+    aggregator.consolidate_models(target=target, sources=sources)
 
 
 

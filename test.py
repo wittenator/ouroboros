@@ -1,8 +1,9 @@
 import torch
 import torchvision
+from core.aggregator import FederatedAveraging
 from core.utils import Participant
-from core.steps import Distribute_Dataset, Train
-from core.lifecycle import ClassificationModelTrainer
+from core.steps import Aggregate, Distribute_Dataset, Train, Validate
+from core.lifecycle import ClassificationModelTrainer, ClassificationModelValidator
 
 use_cuda = torch.cuda.is_available()
 
@@ -25,6 +26,7 @@ server = Participant(
     group = 'server',
     id = 1,
     trainer = ClassificationModelTrainer,
+    validator=ClassificationModelValidator
 )
 
 clients = [
@@ -33,6 +35,7 @@ clients = [
         group = 'client',
         id = i,
         trainer = ClassificationModelTrainer,
+        validator=ClassificationModelValidator
     ) for i in range(5)
 ]
 
@@ -41,12 +44,37 @@ Distribute_Dataset(
     dataset = train_data,
     name = 'train',
     split = 'dirichlet',
-    alpha = 0.1
+    alpha = 100
+)
+
+Distribute_Dataset(
+    to = clients + [server],
+    dataset = test_data,
+    name = 'validate',
+    split = 'complete',
 )
 
 Train(
     on = clients,
-    epochs = 1,
-    device = device
+    epochs = 2,
+    device = device,
+    batch_size=128
+)
+Aggregate(
+    sources = clients,
+    target = server,
+    aggregator = FederatedAveraging()
+)
+
+Validate(
+    on = clients,
+    device = device,
+    batch_size = 128
+)
+
+Validate(
+    on = server,
+    device = device,
+    batch_size = 128
 )
 

@@ -5,7 +5,10 @@ from typing import Union
 from abc import ABC, abstractmethod
 
 import torch
+from torch import nn
 import numpy
+
+from core.utils import Participant
 
 
 class ModelConsolidationStrategy(ABC):
@@ -39,7 +42,7 @@ class FederatedAveraging(ModelConsolidationStrategy):
     updated global model.
     """
 
-    def consolidate_models(self, target: nn.Module, sources: list[nn.Module]) -> None:
+    def consolidate_models(self, target: Participant, sources: list[Participant]) -> None:
         """Consolidates the models of the specified federated learning source into a new global model.
 
         Args:
@@ -71,7 +74,7 @@ class FederatedAveraging(ModelConsolidationStrategy):
                         source_parameter_sum = source.model.state_dict()[parameter_name].detach().clone()
                     else:
                         source_parameter_sum += source.model.state_dict()[parameter_name].detach().clone()
-                "global_model_state_dict"[parameter_name].copy_(source_parameter_sum)
+                global_model_state_dict[parameter_name].copy_(source_parameter_sum)
             else:
                 raise ValueError(f'The parameter consolidation method "{parameter_consolidation_method.value}" is not supported.')
 
@@ -119,12 +122,6 @@ class FederatedAveraging(ModelConsolidationStrategy):
                 if 'bias' in child_module.__dict__ and child_module.bias:
                     parameter_consolidation_methods[f'{child_name}.bias'] = FederatedAveragingParameterConsolidationMethod.MEAN
 
-            elif isinstance(child_module, DeepSVDDHead):
-
-                # The Deep SVDD head has a hypersphere center and radius parameter, which can be consolidated by averaging them
-                parameter_consolidation_methods[f'{child_name}.radius'] = FederatedAveragingParameterConsolidationMethod.MEAN
-                parameter_consolidation_methods[f'{child_name}.center'] = FederatedAveragingParameterConsolidationMethod.MEAN
-
             elif isinstance(child_module, (torch.nn.BatchNorm1d, torch.nn.BatchNorm2d)):
 
                 # BatchNorm layers have a gamma and a beta parameter (the parameters are called 'weight' and 'bias' respectively), a running mean, and
@@ -139,7 +136,17 @@ class FederatedAveraging(ModelConsolidationStrategy):
 
             elif isinstance(
                     child_module,
-                    (torch.nn.Flatten, torch.nn.Unflatten, torch.nn.ReLU, torch.nn.Sigmoid, torch.nn.LeakyReLU, torch.nn.MaxPool2d, Interpolate)):
+                    (
+                        torch.nn.Flatten,
+                        torch.nn.Unflatten,
+                        torch.nn.ReLU,
+                        torch.nn.Sigmoid,
+                        torch.nn.LeakyReLU,
+                        torch.nn.MaxPool2d,
+                        torch.nn.modules.pooling.AdaptiveAvgPool2d,
+                        torch.nn.modules.dropout.Dropout
+                    )
+                ):
 
                 # Flatten, Unflatten, ReLU activations, Sigmoid activations, LeakeReLU activations, MaxPool2d Layers and Interpolate layers have no
                 # parameters, therefore, nothing needs to be done

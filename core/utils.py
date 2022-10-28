@@ -8,12 +8,15 @@ from typing import List, Any, Dict
 from PIL import Image
 from dataclasses import dataclass, field
 
+from core.lifecycle import ModelTrainer, ModelValidator
+
 @dataclass
 class Participant:
     """Class for keeping track of an item in inventory."""
     model: nn.Module
     group: Any
-    trainer: Any
+    trainer: ModelTrainer
+    validator: ModelValidator
     id: Any = None
     datasets: Dict = field(default_factory=dict)
 
@@ -71,6 +74,20 @@ def print_split(idcs, labels):
   print(" - Total:     {}".format(np.stack(splits, axis=0).sum(axis=0)))
   print()
 
+
+def compare_models(model_1, model_2):
+    models_differ = 0
+    for key_item_1, key_item_2 in zip(model_1.state_dict().items(), model_2.state_dict().items()):
+        if torch.equal(key_item_1[1], key_item_2[1]):
+            pass
+        else:
+            models_differ += 1
+            if (key_item_1[0] == key_item_2[0]):
+                print('Mismtach found at', key_item_1[0])
+            else:
+                raise Exception
+    if models_differ == 0:
+        print('Models match perfectly! :)')
 '''
 class PublicDataset(pl.LightningDataModule):
     def __init__(self, data_dir: str = "datasets", batch_size: int = 32, n_public: int = 80000, n_distill: int = 80000, transforms=None):

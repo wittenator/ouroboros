@@ -65,9 +65,9 @@ class ClassificationModelTrainer(ModelTrainer):
             self,
             model: torch.nn.Module,
             device: Union[str, torch.device],
-            dataset: torch.utils.data.Dataset,
+            dataset: torch.utils.data.Dataset,  # type: ignore
             batch_size: int,
-            learning_rate: float = 0.01
+            learning_rate: float = 0.0001
             ) -> None:
         """Initializes a new ReconstructionBasedAnomalyDetectionModelTrainer instance.
 
@@ -89,7 +89,7 @@ class ClassificationModelTrainer(ModelTrainer):
         self.learning_rate = learning_rate
 
         # Creates the data loaders
-        self.training_data_loader = torch.utils.data.DataLoader(
+        self.training_data_loader = torch.utils.data.DataLoader(  # type: ignore
             self.dataset,
             batch_size=self.batch_size,
             shuffle=True
@@ -119,7 +119,7 @@ class ClassificationModelTrainer(ModelTrainer):
         self.model.train()
 
         # Cycles through the entire training subset of the dataset and trains the model on the samples (this is for one epoch of training)
-        metric = torchmetrics.Accuracy()
+        metric = torchmetrics.Accuracy().to(self.device)
         for inputs, classes in self.training_data_loader:
 
             # Resets the gradients of the optimizer (otherwise the gradients would accumulate)
@@ -127,6 +127,7 @@ class ClassificationModelTrainer(ModelTrainer):
 
             # Moves the inputs to the selected device
             inputs = inputs.to(self.device, non_blocking=True)
+            classes = classes.to(self.device, non_blocking=True)
 
             # Performs a forward pass through the neural network
             class_probs = self.model(inputs)
@@ -138,26 +139,24 @@ class ClassificationModelTrainer(ModelTrainer):
 
             # Updates the sum of losses from which the mean loss will be computed
             acc = metric(class_probs.argmax(axis=1), classes)
-            print(acc)
 
         # metric on all batches using custom accumulation
         acc = metric.compute()
 
         # Reseting internal state such that metric ready for new data
         metric.reset()
-        return acc
+        return acc.item()
 
-'''
-class ReconstructionBasedAnomalyDetectionModelValidator(ModelValidator):
+
+class ClassificationModelValidator(ModelValidator):
     """Represents a model validator, which validates a reconstruction-based anomaly detection model on the validation subset of the dataset."""
 
     def __init__(
             self,
             model: torch.nn.Module,
             device: Union[str, torch.device],
-            validation_subset: torch.utils.data.Dataset,
-            batch_size: int,
-            model_name: str) -> None:
+            dataset: torch.utils.data.Dataset,  # type: ignore
+            batch_size: int) -> None:
         """Initializes a new ReconstructionBasedAnomalyDetectionModelValidator instance.
 
         Args:
@@ -171,9 +170,8 @@ class ReconstructionBasedAnomalyDetectionModelValidator(ModelValidator):
         # Stores the arguments for later use
         self.model = model
         self.device = device
-        self.validation_subset = validation_subset
+        self.validation_subset = dataset
         self.batch_size = batch_size
-        self.model_name = model_name
 
         # Creates the data loaders
         self.validation_data_loader = torch.utils.data.DataLoader(
@@ -185,9 +183,9 @@ class ReconstructionBasedAnomalyDetectionModelValidator(ModelValidator):
         self.model = self.model.to(self.device)
 
         # Creates the loss function
-        self.loss_function = torch.nn.MSELoss().to(self.device)
+        self.loss_function = torch.nn.CrossEntropyLoss().to(self.device)
 
-    def validate(self) -> tuple[float, float, float, float, float]:
+    def validate(self) -> float:
         """Validates the model on the validation subset of the dataset.
 
         Returns:
@@ -205,30 +203,28 @@ class ReconstructionBasedAnomalyDetectionModelValidator(ModelValidator):
         with torch.no_grad():
 
             # Cycles through the whole validation subset of the dataset and performs the validation
-            mean_loss = MeanLoss()
-            auc = AUC()
-            mean_anomaly_score = MeanAnomalyScore()
-            for inputs, labels in ProgressBar(self.validation_data_loader, description=f'Validating {self.model_name}', unit='batches'):
+            metric = torchmetrics.Accuracy().to(self.device)
+            for inputs, classes in self.validation_data_loader:
 
                 # Transfers the batch to the selected device
                 inputs = inputs.to(self.device, non_blocking=True)
-                labels = labels.to(self.device, non_blocking=True)
+                classes = classes.to(self.device, non_blocking=True)
 
                 # Performs the forward pass through the neural network
-                reconstructions = self.model(inputs)
-                loss = self.loss_function(reconstructions, inputs)  # pylint: disable=not-callable
-                anomaly_scores = torch.pow(reconstructions - inputs, 2).view(inputs.shape[0], -1).sum(dim=1)
+                class_probs = self.model(inputs)
+                loss = self.loss_function(class_probs, classes)  # pylint: disable=not-callable
 
                 # Updates the validation metrics
-                mean_loss.update(loss)
-                auc.update(anomaly_scores, labels)
-                mean_anomaly_score.update(anomaly_scores, labels)
+                acc = metric(class_probs.argmax(axis=1), classes)
 
-            # Computes the validation metrics and returns them
-            inlier_mean_anomaly_score, outlier_mean_anomaly_score, anomaly_score_p_value = mean_anomaly_score.compute()
-            return mean_loss.compute(), auc.compute(), inlier_mean_anomaly_score, outlier_mean_anomaly_score, anomaly_score_p_value
+            # metric on all batches using custom accumulation
+            acc = metric.compute()
 
+            # Reseting internal state such that metric ready for new data
+            metric.reset()
+            return acc.item()
 
+'''
 class ReconstructionBasedAnomalyDetectionModelInferer(ModelInferer):
     """Represents a model inferer, which performs inference on a reconstruction-based anomaly detection model."""
 
