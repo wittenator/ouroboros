@@ -1,24 +1,21 @@
-from time import sleep
-
 import torch
+from torch import nn
 import torchvision
 from os.path import join
 import numpy as np
-import pytorch_lightning as pl
-from matplotlib import pyplot as plt
-from sklearn.datasets import make_blobs
 from torch.utils.data import DataLoader, Subset, TensorDataset
-from typing import List
+from typing import List, Any, Dict
 from PIL import Image
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 @dataclass
 class Participant:
     """Class for keeping track of an item in inventory."""
     model: nn.Module
     group: Any
+    trainer: Any
     id: Any = None
-    datasets: dict = {}
+    datasets: Dict = field(default_factory=dict)
 
 def split_dirichlet(labels, n_clients, alpha, double_stochstic=True, **kwargs):
     '''Splits data among the clients according to a dirichlet distribution with parameter alpha'''
@@ -74,6 +71,7 @@ def print_split(idcs, labels):
   print(" - Total:     {}".format(np.stack(splits, axis=0).sum(axis=0)))
   print()
 
+'''
 class PublicDataset(pl.LightningDataModule):
     def __init__(self, data_dir: str = "datasets", batch_size: int = 32, n_public: int = 80000, n_distill: int = 80000, transforms=None):
         super().__init__()
@@ -206,3 +204,4 @@ class STL10DataModule(PublicDataset):
 
     def train_data(self):
         return torchvision.datasets.STL10(root=join(self.data_dir, 'STL10'), split='unlabeled', folds=None, download=True, transform=self.transforms)
+'''

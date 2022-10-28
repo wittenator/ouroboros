@@ -1,18 +1,25 @@
 import operator
+from pyexpat import model
 from typing import List, Type
 
 import numpy as np
 import torch
+from torch.utils.data import Subset
 from torch import nn
+from tqdm import tqdm, trange
+
+from .utils import split_dirichlet
 
 def Distribute_Dataset(to, dataset, name, split, **split_kwargs):
-    if split == "dirichlet":
-        _train_data = [Subset(train_data, subset_idx) for subset_idx in
-                            split_dirichlet(train_data.targets, n_clients=len(n_clients), **self.split_kwargs)]
-    else:
-        _train_data = train_data
 
-    return message
+    if split == "dirichlet":
+        split_dataset = [Subset(dataset, subset_idx) for subset_idx in
+                            split_dirichlet(dataset.targets, n_clients=len(to), **split_kwargs)]
+        for model, dataset_part in zip(to, split_dataset) :
+            model.datasets[name] = dataset_part
+    else:
+        for model in to :
+            model.datasets[name] = dataset
 
 def Distribute_Model(source, target):
 
@@ -22,9 +29,17 @@ def Distribute_Model(source, target):
     for model in target:
         model.load_state_dict(source.state_dict())
 
-def Train(on, epochs, trainer, logger=None):
-    for model in on:
-        trainer(max_epochs=epochs, logger=logger, weights_summary=None).fit(model)
+def Train(on, epochs, device, logger=None):
+    for participant in on:
+        trainer_instance = participant.trainer(
+            model = participant.model,
+            device = device,
+            dataset = participant.datasets["train"],
+            batch_size = 16
+        )
+        for epoch in trange(epochs):
+            epoch_acc = trainer_instance.train_for_one_epoch()
+            print(epoch_acc)
 
 def Test(on, tester, logger=None):
     for model in on:
