@@ -7,10 +7,12 @@ import torch
 from torch.utils.data import Subset
 from torch import nn
 from tqdm import tqdm, trange
+from torch.utils.tensorboard.writer import SummaryWriter
+
 
 from core.aggregator import FederatedAveraging, ModelConsolidationStrategy
 
-from .utils import split_dirichlet
+from .utils import Participant, split_dirichlet
 
 def Distribute_Dataset(to, dataset, name, split, **split_kwargs):
 
@@ -28,25 +30,23 @@ def Distribute_Dataset(to, dataset, name, split, **split_kwargs):
 
 def Distribute_Model(source, target):
 
-    assert issubclass(source, torch.nn.Module), "The source must be a Pytorch model which has a state_dict() function"
-    assert all([issubclass(target_model, torch.nn.Module) for target_model in target]), "The target must be a sequence of Pytorch models which has a load_state_dict() function"
+    for participant in target:
+        participant.model.load_state_dict(source.model.state_dict())  # type: ignore
 
-    for model in target:
-        model.load_state_dict(source.state_dict())  # type: ignore
-
-def Train(on, epochs, device, batch_size, logger=None):
+def Train(on: List[Participant], epochs: int, device: torch.device, batch_size: int, communication_round: int, logger: SummaryWriter):
     for participant in on:
         trainer_instance = participant.trainer(
             model = participant.model,
             device = device,
             dataset = participant.datasets["train"],
             batch_size = batch_size
-        )
+        )  # type: ignore
         for epoch in trange(epochs):
             epoch_acc = trainer_instance.train_for_one_epoch()
-            print(epoch_acc)
+        logger.add_scalar(f'train/{participant.group}/{participant.group}-{participant.id}/accuracy', epoch_acc, communication_round)
 
-def Validate(on, device, batch_size, logger=None):
+
+def Validate(on, device, batch_size, communication_round: int, logger: SummaryWriter):
 
     if not isinstance(on, Iterable):
         on = [on]
@@ -59,7 +59,8 @@ def Validate(on, device, batch_size, logger=None):
             batch_size = batch_size
         ).validate()
 
-        print(acc)
+        logger.add_scalar(f'val/{participant.group}/{participant.group}-{participant.id}/accuracy', acc, communication_round)
+
 
 def Aggregate(sources, target, aggregator: ModelConsolidationStrategy):
     aggregator.consolidate_models(target=target, sources=sources)

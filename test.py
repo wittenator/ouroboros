@@ -1,9 +1,18 @@
+from datetime import datetime
+import os
 import torch
 import torchvision
+from torch.utils.tensorboard.writer import SummaryWriter
+from tqdm import trange
 from core.aggregator import FederatedAveraging
 from core.utils import Participant
-from core.steps import Aggregate, Distribute_Dataset, Train, Validate
+from core.steps import Aggregate, Distribute_Dataset, Distribute_Model, Train, Validate
 from core.lifecycle import ClassificationModelTrainer, ClassificationModelValidator
+
+logdir = os.getenv("LOGDIR") or "logs/scalars/" + datetime.now().strftime(
+    "%Y%m%d-%H%M%S"
+)
+logger = SummaryWriter(log_dir=logdir)
 
 use_cuda = torch.cuda.is_available()
 
@@ -44,7 +53,7 @@ Distribute_Dataset(
     dataset = train_data,
     name = 'train',
     split = 'dirichlet',
-    alpha = 100
+    alpha = 0.01
 )
 
 Distribute_Dataset(
@@ -54,27 +63,34 @@ Distribute_Dataset(
     split = 'complete',
 )
 
-Train(
-    on = clients,
-    epochs = 2,
-    device = device,
-    batch_size=128
-)
-Aggregate(
-    sources = clients,
-    target = server,
-    aggregator = FederatedAveraging()
-)
+for communication_round in trange(2):
+    Distribute_Model(
+        source = server,
+        target = clients
+    )
 
-Validate(
-    on = clients,
-    device = device,
-    batch_size = 128
-)
+    Train(
+        on = clients,
+        epochs = 2,
+        device = device,
+        batch_size=64,
+        logger=logger,
+        communication_round=communication_round
+    )
 
-Validate(
-    on = server,
-    device = device,
-    batch_size = 128
-)
+    Aggregate(
+        sources = clients,
+        target = server,
+        aggregator = FederatedAveraging()
+    )
+
+    Validate(
+        on = clients + [server],
+        device = device,
+        batch_size = 64,
+        logger=logger,
+        communication_round=communication_round
+    )
+
+logger.close()
 

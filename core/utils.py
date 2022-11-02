@@ -15,8 +15,8 @@ class Participant:
     """Class for keeping track of an item in inventory."""
     model: nn.Module
     group: Any
-    trainer: ModelTrainer
-    validator: ModelValidator
+    trainer: type[ModelTrainer]
+    validator: type[ModelValidator]
     id: Any = None
     datasets: Dict = field(default_factory=dict)
 
