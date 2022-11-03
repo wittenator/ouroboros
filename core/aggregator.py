@@ -1,7 +1,7 @@
 """Represents a module, which contains the primitives for federated learning."""
 
 from enum import Enum
-from typing import Union
+from typing import Dict, List, Union
 from abc import ABC, abstractmethod
 
 import torch
@@ -9,7 +9,7 @@ from torch import nn
 import torchvision
 import numpy
 
-from core.utils import Participant
+from .utils import Participant
 
 
 class ModelConsolidationStrategy(ABC):
@@ -18,7 +18,7 @@ class ModelConsolidationStrategy(ABC):
     """
 
     @abstractmethod
-    def consolidate_models(self, target: nn.Module, sources: list[nn.Module]) -> None:
+    def consolidate_models(self, target: nn.Module, sources: List[nn.Module]) -> None:
         """Consolidates the models of the specified federated learning source into a new global model.
 
         Args:
@@ -43,7 +43,7 @@ class FederatedAveraging(ModelConsolidationStrategy):
     updated global model.
     """
 
-    def consolidate_models(self, target: Participant, sources: list[Participant]) -> None:
+    def consolidate_models(self, target: Participant, sources: List[Participant]) -> None:
         """Consolidates the models of the specified federated learning source into a new global model.
 
         Args:
@@ -79,7 +79,7 @@ class FederatedAveraging(ModelConsolidationStrategy):
             else:
                 raise ValueError(f'The parameter consolidation method "{parameter_consolidation_method.value}" is not supported.')
 
-    def get_parameter_consolidation_methods(self, module: torch.nn.Module, parent_name: str = None) -> dict[str, str]:
+    def get_parameter_consolidation_methods(self, module: torch.nn.Module, parent_name: str = None) -> Dict[str, str]:
         """Different neural network layer types need to be handled differently when consolidating the model. For example, the weights and biases of
         linear layers must be averaged, while the number of tracked batches in a batchnorm layer have to summed up. This method goes through all
         layers (called modules in PyTorch) and determines the method by which their parameters can be consolidated. Since some modules contain other

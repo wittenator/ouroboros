@@ -4,19 +4,19 @@ import torchvision
 from os.path import join
 import numpy as np
 from torch.utils.data import DataLoader, Subset, TensorDataset
-from typing import List, Any, Dict
+from typing import List, Any, Dict, Type
 from PIL import Image
 from dataclasses import dataclass, field
 
-from core.lifecycle import ModelTrainer, ModelValidator
+from .lifecycle import ModelTrainer, ModelValidator
 
 @dataclass
 class Participant:
     """Class for keeping track of an item in inventory."""
     model: nn.Module
     group: Any
-    trainer: type[ModelTrainer]
-    validator: type[ModelValidator]
+    trainer: Type[ModelTrainer]
+    validator: Type[ModelValidator]
     id: Any = None
     datasets: Dict = field(default_factory=dict)
 
