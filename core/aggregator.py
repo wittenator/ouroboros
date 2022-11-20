@@ -109,11 +109,19 @@ class FederatedAveraging(ModelConsolidationStrategy):
             child_name = child_name if parent_name is None else f'{parent_name}.{child_name}'
 
             # For different module types, different methods are needed to consolidate their parameters
-            if isinstance(child_module, (torch.nn.Sequential, torchvision.models.mobilenetv3.InvertedResidual, torchvision.models.mobilenetv3.SqueezeExcitation)):
+            if isinstance(
+                child_module,
+                (
+                    torch.nn.Sequential,
+                    torchvision.models.mobilenetv3.InvertedResidual,
+                    torchvision.ops.SqueezeExcitation,
+                    torchvision.models.resnet.BasicBlock,
+                )
+            ):
 
                 # Sequential modules contains other modules, which are invoked in order, sequential modules do not have any parameters of their own,
                 # so the consolidation method for the parameters of their child modules need to be determined recursively
-                parameter_consolidation_methods |= self.get_parameter_consolidation_methods(child_module, parent_name=child_name)
+                parameter_consolidation_methods.update(self.get_parameter_consolidation_methods(child_module, parent_name=child_name))
 
             elif isinstance(child_module, (torch.nn.Linear, torch.nn.Conv2d, torch.nn.ConvTranspose2d)):
 
@@ -147,7 +155,8 @@ class FederatedAveraging(ModelConsolidationStrategy):
                         torch.nn.modules.pooling.AdaptiveAvgPool2d,
                         torch.nn.modules.dropout.Dropout,
                         torch.nn.modules.activation.Hardswish,
-                        torch.nn.modules.linear.Identity
+                        torch.nn.modules.linear.Identity,
+                        torch.nn.modules.activation.Hardsigmoid
                     )
                 ):
 

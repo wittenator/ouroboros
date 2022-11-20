@@ -15,12 +15,13 @@ from core.aggregator import FederatedAveraging, ModelConsolidationStrategy
 from .utils import Participant, split_dirichlet
 
 def Distribute_Dataset(to, dataset, name, split, **split_kwargs):
+    rng = np.random.default_rng()
 
     if not isinstance(to, Iterable):
         to = [to]
 
     if split == "dirichlet":
-        split_dataset = [Subset(dataset, subset_idx) for subset_idx in
+        split_dataset = [Subset(dataset, rng.choice(subset_idx, replace=False, size=split_kwargs['datapoints_per_split'] if 'datapoints_per_split' in split_kwargs else len(subset_idx))) for subset_idx in
                             split_dirichlet(dataset.targets, n_clients=len(to), **split_kwargs)]
         for model, dataset_part in zip(to, split_dataset) :
             model.datasets[name] = dataset_part

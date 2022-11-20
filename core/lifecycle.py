@@ -67,7 +67,7 @@ class ClassificationModelTrainer(ModelTrainer):
             device: Union[str, torch.device],
             dataset: torch.utils.data.Dataset,  # type: ignore
             batch_size: int,
-            learning_rate: float = 0.0001
+            learning_rate: float = 0.0001,
             ) -> None:
         """Initializes a new ReconstructionBasedAnomalyDetectionModelTrainer instance.
 
@@ -92,7 +92,8 @@ class ClassificationModelTrainer(ModelTrainer):
         self.training_data_loader = torch.utils.data.DataLoader(  # type: ignore
             self.dataset,
             batch_size=self.batch_size,
-            shuffle=True
+            shuffle=True,
+            pin_memory=True
         )
 
         # Moves the model to the specified device
@@ -176,7 +177,9 @@ class ClassificationModelValidator(ModelValidator):
         # Creates the data loaders
         self.validation_data_loader = torch.utils.data.DataLoader(
             self.validation_subset,
-            batch_size=self.batch_size
+            batch_size=self.batch_size,
+            pin_memory=True,
+            shuffle=True
         )
 
         # Moves the model to the specified device
