@@ -103,7 +103,7 @@ class ClassificationModelTrainer(ModelTrainer):
         self.loss_function = torch.nn.CrossEntropyLoss().to(self.device)
 
         # Creates the optimizer for the training
-        self.optimizer = torch.optim.Adam(
+        self.optimizer = torch.optim.AdamW(
             self.model.parameters(),
             lr=self.learning_rate
         )
