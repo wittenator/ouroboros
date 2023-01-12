@@ -43,41 +43,55 @@ class FederatedAveraging(ModelConsolidationStrategy):
     updated global model.
     """
 
-    def consolidate_models(self, target: Participant, sources: List[Participant]) -> None:
+    def consolidate_models(self, target_model: nn.Module, source_models: Union[List[nn.Module], nn.Module], num_sources: int = None, add_to_target=False) -> None:
         """Consolidates the models of the specified federated learning source into a new global model.
 
         Args:
-            target (nn.Module): The federated learning central server that contains the global model, which is to be
+            target_model (nn.Module): The federated learning central server that contains the global model, which is to be
                 updated from the source models.
             sources (list[nn.Module]): The federated learning sources, whose models are to be consolidated into an updated global model.
         """
 
+        assert not (isinstance(source_models, nn.Module) and num_sources is None), "If incremental federated averaging is performed, the number of all source models must be passed"
+
+        if isinstance(source_models, List):
+            num_sources = len(source_models)
+        else:
+            source_models = [source_models]
+
         # Determines which method of consolidating parameters is used based on the layer types of the model
-        global_model_state_dict = target.model.state_dict()
-        parameter_consolidation_methods = self.get_parameter_consolidation_methods(target.model)
-        for parameter_name, parameter_consolidation_method in parameter_consolidation_methods.items():
+        global_model_state_dict = target_model.state_dict()
+        parameter_consolidation_methods = self.get_parameter_consolidation_methods(target_model)
+        with torch.no_grad():
+            for parameter_name, parameter_consolidation_method in parameter_consolidation_methods.items():
 
-            # When the parameter consolidation method is "mean", the parameter is averaged over the sources
-            if parameter_consolidation_method is FederatedAveragingParameterConsolidationMethod.MEAN:
-                source_parameter_sum = None
-                for source in sources:
-                    if source_parameter_sum is None:
-                        source_parameter_sum = source.model.state_dict()[parameter_name].detach().clone()
+                # When the parameter consolidation method is "mean", the parameter is averaged over the sources
+                if parameter_consolidation_method is FederatedAveragingParameterConsolidationMethod.MEAN:
+                    source_parameter_sum = None
+                    for source_model in source_models:
+                        if source_parameter_sum is None:
+                            source_parameter_sum = source_model.state_dict()[parameter_name].detach().clone() / num_sources
+                        else:
+                            source_parameter_sum += source_model.state_dict()[parameter_name].detach().clone() / num_sources
+                    if add_to_target:
+                        global_model_state_dict[parameter_name].add_(source_parameter_sum)
                     else:
-                        source_parameter_sum += source.model.state_dict()[parameter_name].detach().clone()
-                global_model_state_dict[parameter_name].copy_(source_parameter_sum / len(sources))
+                        global_model_state_dict[parameter_name].copy_(source_parameter_sum)
 
-            # When the parameter consolidation method is "sum", the parameter is summed over the sources
-            elif parameter_consolidation_method is FederatedAveragingParameterConsolidationMethod.SUM:
-                source_parameter_sum = None
-                for source in sources:
-                    if source_parameter_sum is None:
-                        source_parameter_sum = source.model.state_dict()[parameter_name].detach().clone()
+                # When the parameter consolidation method is "sum", the parameter is summed over the sources
+                elif parameter_consolidation_method is FederatedAveragingParameterConsolidationMethod.SUM:
+                    source_parameter_sum = None
+                    for source_model in source_models:
+                        if source_parameter_sum is None:
+                            source_parameter_sum = source_model.state_dict()[parameter_name].detach().clone()
+                        else:
+                            source_parameter_sum += source_model.state_dict()[parameter_name].detach().clone()
+                    if add_to_target:
+                        global_model_state_dict[parameter_name].add_(source_parameter_sum)
                     else:
-                        source_parameter_sum += source.model.state_dict()[parameter_name].detach().clone()
-                global_model_state_dict[parameter_name].copy_(source_parameter_sum)
-            else:
-                raise ValueError(f'The parameter consolidation method "{parameter_consolidation_method.value}" is not supported.')
+                        global_model_state_dict[parameter_name].copy_(source_parameter_sum)
+                else:
+                    raise ValueError(f'The parameter consolidation method "{parameter_consolidation_method.value}" is not supported.')
 
     def get_parameter_consolidation_methods(self, module: torch.nn.Module, parent_name: str = None) -> Dict[str, str]:
         """Different neural network layer types need to be handled differently when consolidating the model. For example, the weights and biases of
@@ -116,6 +130,7 @@ class FederatedAveraging(ModelConsolidationStrategy):
                     torchvision.models.mobilenetv3.InvertedResidual,
                     torchvision.ops.SqueezeExcitation,
                     torchvision.models.resnet.BasicBlock,
+                    torchvision.models.resnet.Bottleneck,
                 )
             ):
 

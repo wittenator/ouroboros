@@ -67,7 +67,7 @@ class ClassificationModelTrainer(ModelTrainer):
             device: Union[str, torch.device],
             dataset: torch.utils.data.Dataset,  # type: ignore
             batch_size: int,
-            learning_rate: float = 0.0001,
+            learning_rate: float = 0.001,
             ) -> None:
         """Initializes a new ReconstructionBasedAnomalyDetectionModelTrainer instance.
 
@@ -92,8 +92,7 @@ class ClassificationModelTrainer(ModelTrainer):
         self.training_data_loader = torch.utils.data.DataLoader(  # type: ignore
             self.dataset,
             batch_size=self.batch_size,
-            shuffle=True,
-            pin_memory=True
+            shuffle=True
         )
 
         # Moves the model to the specified device
@@ -103,7 +102,7 @@ class ClassificationModelTrainer(ModelTrainer):
         self.loss_function = torch.nn.CrossEntropyLoss().to(self.device)
 
         # Creates the optimizer for the training
-        self.optimizer = torch.optim.AdamW(
+        self.optimizer = torch.optim.SGD(
             self.model.parameters(),
             lr=self.learning_rate
         )

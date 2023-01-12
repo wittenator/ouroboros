@@ -13,10 +13,10 @@ from .lifecycle import ModelTrainer, ModelValidator
 @dataclass
 class Participant:
     """Class for keeping track of an item in inventory."""
-    model: nn.Module
     group: Any
     trainer: Type[ModelTrainer]
     validator: Type[ModelValidator]
+    model: nn.Module = None
     id: Any = None
     datasets: Dict = field(default_factory=dict)
 
@@ -88,6 +88,8 @@ def compare_models(model_1, model_2):
                 raise Exception
     if models_differ == 0:
         print('Models match perfectly! :)')
+
+noop = lambda *args, **kwargs: None
 '''
 class PublicDataset(pl.LightningDataModule):
     def __init__(self, data_dir: str = "datasets", batch_size: int = 32, n_public: int = 80000, n_distill: int = 80000, transforms=None):

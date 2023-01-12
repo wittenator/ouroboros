@@ -1,4 +1,5 @@
-from typing import Iterable, List
+import copy
+from typing import Callable, Iterable, List
 
 import numpy as np
 import torch
@@ -9,7 +10,7 @@ from torch.utils.tensorboard.writer import SummaryWriter
 
 from core.aggregator import ModelConsolidationStrategy
 
-from .utils import Participant, split_dirichlet
+from .utils import Participant, split_dirichlet, noop
 
 def Distribute_Dataset(to, dataset, name, split, **split_kwargs):
     rng = np.random.default_rng()
@@ -71,7 +72,62 @@ def Validate(on, device, batch_size, communication_round: int, logger: SummaryWr
 
 
 def Aggregate(sources, target, aggregator: ModelConsolidationStrategy):
-    aggregator.consolidate_models(target=target, sources=sources)
+    aggregator.consolidate_models(target_model=target.model, sources=[source.model for source in sources])
+
+def Train_and_Aggregate(
+    on: List[Participant],
+    target: Participant,
+    epochs: int,
+    device: torch.device,
+    batch_size: int,
+    communication_round: int,
+    logger: SummaryWriter,
+    aggregator: ModelConsolidationStrategy,
+    pre_training_hook: Callable = noop,
+    post_training_hook: Callable = noop,
+    pre_aggregation_hook: Callable = noop,
+    ):
+    central_model = target.model
+    central_model = central_model.to(device)
+    temp_model = copy.deepcopy(central_model)
+    temp_model = temp_model.to(device)
+    client_model = copy.deepcopy(target.model)
+
+
+    for idx, participant in enumerate(on):
+        client_model.load_state_dict(central_model.state_dict())
+        participant.model = client_model
+        trainer_instance = participant.trainer(
+            model = participant.model,
+            device = device,
+            dataset = participant.datasets["train"],
+            batch_size = batch_size
+            )  # type: ignore
+        # execute hook before trainig starts
+        pre_training_hook(participant=participant, communication_round=communication_round, logger=logger)
+
+        for epoch in trange(epochs):
+            epoch_acc = trainer_instance.train_for_one_epoch()
+        logger.add_scalar(f'train/{participant.group}/{participant.group}-{participant.id}/accuracy', epoch_acc, communication_round)
+
+
+        # execute hook after trainig ends
+        post_training_hook(participant=participant, communication_round=communication_round, logger=logger)
+
+        # execute hook before aggregation ends
+        pre_aggregation_hook(participant=participant, communication_round=communication_round, logger=logger)
+        
+        aggregator.consolidate_models(
+            target_model=temp_model,
+            source_models=participant.model,
+            num_sources=len(on),
+            add_to_target=(idx!=0)
+        )
+
+        # remove reference to temporary client model
+        participant.model = None
+    target.model.load_state_dict(temp_model.state_dict())
+
 
 
 
