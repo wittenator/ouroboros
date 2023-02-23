@@ -10,6 +10,18 @@ from dataclasses import dataclass, field
 
 from .lifecycle import ModelTrainer, ModelValidator
 
+class ModelPersistanceQueue:
+    self.queue = []
+    self.maxlen = 2
+
+    def put(self, model):
+        if len(self.queue) > self.maxlen:
+            torch.save(self.queue[-1].state_dict(), f"./tmp/test-0.pt")
+            
+
+class ModelPersistanceDescriptor:
+
+
 @dataclass
 class Participant:
     """Class for keeping track of an item in inventory."""
