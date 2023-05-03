@@ -48,7 +48,8 @@ def Train(on: List[Participant], epochs: int, device: torch.device, batch_size: 
             model = participant.model,
             device = device,
             dataset = participant.datasets["train"],
-            batch_size = batch_size
+            batch_size = batch_size,
+            number_of_classes = participant.number_of_classes,
             )  # type: ignore
         for epoch in trange(epochs):
             epoch_acc = trainer_instance.train_for_one_epoch()
@@ -65,14 +66,15 @@ def Validate(on, device, batch_size, communication_round: int, logger: SummaryWr
             model = participant.model,
             device = device,
             dataset = participant.datasets["validate"],
-            batch_size = batch_size
+            batch_size = batch_size,
+            number_of_classes = participant.number_of_classes,
         ).validate()
 
         logger.add_scalar(f'val/{participant.group}/{participant.group}-{participant.id}/accuracy', acc, communication_round)
 
 
 def Aggregate(sources, target, aggregator: ModelConsolidationStrategy):
-    aggregator.consolidate_models(target_model=target.model, sources=[source.model for source in sources])
+    aggregator.consolidate_models(target_model=target.model, source_models=[source.model for source in sources])
 
 def Train_and_Aggregate(
     on: List[Participant],

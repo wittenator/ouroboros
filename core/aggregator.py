@@ -18,7 +18,7 @@ class ModelConsolidationStrategy(ABC):
     """
 
     @abstractmethod
-    def consolidate_models(self, target: nn.Module, sources: List[nn.Module]) -> None:
+    def consolidate_models(self, target_model: nn.Module, sources_model: List[nn.Module]) -> None:
         """Consolidates the models of the specified federated learning source into a new global model.
 
         Args:
@@ -36,6 +36,20 @@ class FederatedAveragingParameterConsolidationMethod(Enum):
 
     MEAN = 'mean'
     SUM = 'sum'
+
+class SimpleFederatedAveraging(ModelConsolidationStrategy):
+    """Represents a simple federated averaging (FedAvg) algorithm, which can be used to consolidate the models of the federated learning sources into an
+    updated global model. All parameters are averaged over the sources.
+    """
+
+    def consolidate_models(self, target_model: nn.Module, source_models: List[nn.Module]) -> None:
+        with torch.no_grad():
+            target_W = target_model.state_dict()
+            sources_W = [source.state_dict() for source in source_models]
+            for name in target_W:
+                target_W[name] = torch.mean(torch.stack([source_W[name].float() for source_W in sources_W]), dim=0)
+            target_model.load_state_dict(target_W)
+
 
 
 class FederatedAveraging(ModelConsolidationStrategy):

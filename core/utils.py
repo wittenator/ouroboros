@@ -10,18 +10,6 @@ from dataclasses import dataclass, field
 
 from .lifecycle import ModelTrainer, ModelValidator
 
-class ModelPersistanceQueue:
-    self.queue = []
-    self.maxlen = 2
-
-    def put(self, model):
-        if len(self.queue) > self.maxlen:
-            torch.save(self.queue[-1].state_dict(), f"./tmp/test-0.pt")
-            
-
-class ModelPersistanceDescriptor:
-
-
 @dataclass
 class Participant:
     """Class for keeping track of an item in inventory."""
@@ -31,6 +19,7 @@ class Participant:
     model: nn.Module = None
     id: Any = None
     datasets: Dict = field(default_factory=dict)
+    number_of_classes: int = None
 
 def split_dirichlet(labels, n_clients, alpha, double_stochstic=True, **kwargs):
     '''Splits data among the clients according to a dirichlet distribution with parameter alpha'''
