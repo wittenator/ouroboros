@@ -38,8 +38,8 @@ def Distribute_Dataset(to, dataset, name, split, **split_kwargs):
             model.datasets[name] = Subset(dataset, rng.choice(range(len(dataset)), replace=False, size=split_kwargs['datapoints_per_split'] if split_kwargs.get('datapoints_per_split', 0) > 0 else len(dataset)))
 
 def Distribute_Model(source, target):
-
     for participant in target:
+        print(f"Loading model from {source.group}-{source.id} to {participant.group}-{participant.id}")
         participant.model.load_state_dict(source.model.state_dict())  # type: ignore
 
 def Train(on: List[Participant], epochs: int, device: torch.device, batch_size: int, communication_round: int, logger: SummaryWriter):
