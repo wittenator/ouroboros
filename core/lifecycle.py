@@ -3,7 +3,7 @@
 from typing import Any, Union
 from abc import ABC, abstractmethod
 
-import numpy
+import numpy as np
 import torch
 from tqdm import tqdm
 import torchmetrics
@@ -67,7 +67,8 @@ class ClassificationModelTrainer(ModelTrainer):
             device: Union[str, torch.device],
             dataset: torch.utils.data.Dataset,  # type: ignore
             batch_size: int,
-            learning_rate: float = 0.001,
+            learning_rate: float = 0.0001,
+            number_of_classes: int = 10,
             ) -> None:
         """Initializes a new ReconstructionBasedAnomalyDetectionModelTrainer instance.
 
@@ -87,6 +88,8 @@ class ClassificationModelTrainer(ModelTrainer):
         self.dataset = dataset
         self.batch_size = batch_size
         self.learning_rate = learning_rate
+        self.number_of_classes = number_of_classes
+
 
         # Creates the data loaders
         self.training_data_loader = torch.utils.data.DataLoader(  # type: ignore
@@ -102,7 +105,7 @@ class ClassificationModelTrainer(ModelTrainer):
         self.loss_function = torch.nn.CrossEntropyLoss().to(self.device)
 
         # Creates the optimizer for the training
-        self.optimizer = torch.optim.SGD(
+        self.optimizer = torch.optim.AdamW(
             self.model.parameters(),
             lr=self.learning_rate
         )
@@ -119,7 +122,7 @@ class ClassificationModelTrainer(ModelTrainer):
         self.model.train()
 
         # Cycles through the entire training subset of the dataset and trains the model on the samples (this is for one epoch of training)
-        metric = torchmetrics.Accuracy().to(self.device)
+        metric = torchmetrics.Accuracy(task='multiclass', num_classes=self.number_of_classes).to(self.device)
         for inputs, classes in self.training_data_loader:
 
             # Resets the gradients of the optimizer (otherwise the gradients would accumulate)
@@ -152,11 +155,13 @@ class ClassificationModelValidator(ModelValidator):
     """Represents a model validator, which validates a reconstruction-based anomaly detection model on the validation subset of the dataset."""
 
     def __init__(
-            self,
-            model: torch.nn.Module,
-            device: Union[str, torch.device],
-            dataset: torch.utils.data.Dataset,  # type: ignore
-            batch_size: int) -> None:
+        self,
+        model: torch.nn.Module,
+        device: Union[str, torch.device],
+        dataset: torch.utils.data.Dataset,  # type: ignore
+        batch_size: int,
+        number_of_classes: int = 10,
+        ) -> None:
         """Initializes a new ReconstructionBasedAnomalyDetectionModelValidator instance.
 
         Args:
@@ -180,6 +185,7 @@ class ClassificationModelValidator(ModelValidator):
             pin_memory=True,
             shuffle=True
         )
+        self.number_of_classes = number_of_classes
 
         # Moves the model to the specified device
         self.model = self.model.to(self.device)
@@ -205,7 +211,7 @@ class ClassificationModelValidator(ModelValidator):
         with torch.no_grad():
 
             # Cycles through the whole validation subset of the dataset and performs the validation
-            metric = torchmetrics.Accuracy().to(self.device)
+            metric = torchmetrics.Accuracy(task='multiclass', num_classes=self.number_of_classes).to(self.device)
             for inputs, classes in self.validation_data_loader:
 
                 # Transfers the batch to the selected device

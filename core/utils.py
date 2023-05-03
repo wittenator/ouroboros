@@ -19,6 +19,7 @@ class Participant:
     model: nn.Module = None
     id: Any = None
     datasets: Dict = field(default_factory=dict)
+    number_of_classes: int = None
 
 def split_dirichlet(labels, n_clients, alpha, double_stochstic=True, **kwargs):
     '''Splits data among the clients according to a dirichlet distribution with parameter alpha'''
