@@ -67,7 +67,7 @@ class ClassificationModelTrainer(ModelTrainer):
             device: Union[str, torch.device],
             dataset: torch.utils.data.Dataset,  # type: ignore
             batch_size: int,
-            learning_rate: float = 0.0001,
+            learning_rate: float = 0.002,
             number_of_classes: int = 10,
             ) -> None:
         """Initializes a new ReconstructionBasedAnomalyDetectionModelTrainer instance.

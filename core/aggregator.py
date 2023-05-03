@@ -43,10 +43,12 @@ class SimpleFederatedAveraging(ModelConsolidationStrategy):
     """
 
     def consolidate_models(self, target_model: nn.Module, source_models: List[nn.Module]) -> None:
-        target_W = {key : value for key, value in target_model.named_parameters()}
-        sources_W = [{key : value for key, value in source.named_parameters()} for source in source_models]
-        for name in target_W.keys():
-            target_W[name].data = torch.mean(torch.stack([source_W[name].detach() for source_W in sources_W]), dim=0).clone()
+        with torch.no_grad():
+            target_W = target_model.state_dict()
+            sources_W = [source.state_dict() for source in source_models]
+            for name in target_W:
+                target_W[name] = torch.mean(torch.stack([source_W[name].float() for source_W in sources_W]), dim=0)
+            target_model.load_state_dict(target_W)
 
 
 
