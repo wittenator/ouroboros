@@ -64,6 +64,7 @@ class ClassificationModelTrainer(ModelTrainer):
     def __init__(
             self,
             model: torch.nn.Module,
+            optimizer: Any,
             device: Union[str, torch.device],
             dataset: torch.utils.data.Dataset,  # type: ignore
             batch_size: int,
@@ -105,7 +106,7 @@ class ClassificationModelTrainer(ModelTrainer):
         self.loss_function = torch.nn.CrossEntropyLoss().to(self.device)
 
         # Creates the optimizer for the training
-        self.optimizer = torch.optim.AdamW(
+        self.optimizer = optimizer(
             self.model.parameters(),
             lr=self.learning_rate
         )
@@ -133,8 +134,9 @@ class ClassificationModelTrainer(ModelTrainer):
             classes = classes.to(self.device, non_blocking=True)
 
             # Performs a forward pass through the neural network
-            class_probs = self.model(inputs)
-            loss = self.loss_function(class_probs, classes)  # pylint: disable=not-callable
+            with torch.autocast(device_type=self.device.type, dtype=torch.float16):
+                class_probs = self.model(inputs)
+                loss = self.loss_function(class_probs, classes)  # pylint: disable=not-callable
 
             # Performs the backward pass and the optimization step
             loss.backward()

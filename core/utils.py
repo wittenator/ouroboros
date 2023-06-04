@@ -1,3 +1,4 @@
+import random
 import torch
 from torch import nn
 import torchvision
@@ -10,12 +11,19 @@ from dataclasses import dataclass, field
 
 from .lifecycle import ModelTrainer, ModelValidator
 
+class GPUQueue(object):
+    def __init__(self, queue_size) -> None:
+        self.queue_size = queue_size
+        self.models = []
+
+
 @dataclass
 class Participant:
     """Class for keeping track of an item in inventory."""
     group: Any
     trainer: Type[ModelTrainer]
     validator: Type[ModelValidator]
+    optimizer: Any = None
     model: nn.Module = None
     id: Any = None
     datasets: Dict = field(default_factory=dict)
@@ -91,6 +99,17 @@ def compare_models(model_1, model_2):
         print('Models match perfectly! :)')
 
 noop = lambda *args, **kwargs: None
+
+def seed_all(seed: int):
+    torch.manual_seed(seed)
+    np.random.seed(seed)
+    random.seed(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+
+def tune_pytorch():
+    torch.backends.cuda.matmul.allow_tf32 = True
+
 '''
 class PublicDataset(pl.LightningDataModule):
     def __init__(self, data_dir: str = "datasets", batch_size: int = 32, n_public: int = 80000, n_distill: int = 80000, transforms=None):

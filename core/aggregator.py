@@ -47,7 +47,7 @@ class SimpleFederatedAveraging(ModelConsolidationStrategy):
             target_W = target_model.state_dict()
             sources_W = [source.state_dict() for source in source_models]
             for name in target_W:
-                target_W[name] = torch.mean(torch.stack([source_W[name].float() for source_W in sources_W]), dim=0)
+                target_W[name] = torch.mean(torch.stack([source_W[name].to(torch.float16) for source_W in sources_W]), dim=0)
             target_model.load_state_dict(target_W)
 
 

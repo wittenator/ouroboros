@@ -46,6 +46,7 @@ def Train(on: List[Participant], epochs: int, device: torch.device, batch_size: 
     for participant in on:
         trainer_instance = participant.trainer(
             model = participant.model,
+            optimizer = participant.optimizer,
             device = device,
             dataset = participant.datasets["train"],
             batch_size = batch_size,
