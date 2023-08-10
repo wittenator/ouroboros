@@ -134,7 +134,7 @@ class ClassificationModelTrainer(ModelTrainer):
             classes = classes.to(self.device, non_blocking=True)
 
             # Performs a forward pass through the neural network
-            with torch.autocast(device_type=self.device.type, dtype=torch.float16):
+            with torch.autocast(device_type=self.device.type):
                 class_probs = self.model(inputs)
                 loss = self.loss_function(class_probs, classes)  # pylint: disable=not-callable
 

@@ -21,13 +21,14 @@ def Distribute_Dataset(to, dataset, name, split, **split_kwargs):
     if split == "dirichlet":
         split_dataset = []
         for subset_idx in split_dirichlet(dataset.targets, n_clients=len(to), **split_kwargs):
+            print(len(subset_idx))
             split_dataset.append(
                 Subset(
                     dataset,
                     rng.choice(
                         subset_idx,
                         replace=False,
-                        size=split_kwargs['datapoints_per_split'] if split_kwargs.get('datapoints_per_split', 0) > 0 else len(subset_idx)
+                        size=(split_kwargs['datapoints_per_split'] if split_kwargs.get('datapoints_per_split', 0) > 0 else len(subset_idx))
                     )
                 )   
             )
