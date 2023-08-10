@@ -104,11 +104,13 @@ def seed_all(seed: int):
     torch.manual_seed(seed)
     np.random.seed(seed)
     random.seed(seed)
+
+def pytorch_performance_mode():
+    torch.backends.cuda.matmul.allow_tf32 = True
+
+def pytorch_deterministic_mode():
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
-
-def tune_pytorch():
-    torch.backends.cuda.matmul.allow_tf32 = True
 
 '''
 class PublicDataset(pl.LightningDataModule):

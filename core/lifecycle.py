@@ -96,7 +96,9 @@ class ClassificationModelTrainer(ModelTrainer):
         self.training_data_loader = torch.utils.data.DataLoader(  # type: ignore
             self.dataset,
             batch_size=self.batch_size,
-            shuffle=True
+            shuffle=True,
+            pin_memory=True,
+            num_workers=4
         )
 
         # Moves the model to the specified device
@@ -185,7 +187,8 @@ class ClassificationModelValidator(ModelValidator):
             self.validation_subset,
             batch_size=self.batch_size,
             pin_memory=True,
-            shuffle=True
+            shuffle=True,
+            num_workers=4
         )
         self.number_of_classes = number_of_classes
 
