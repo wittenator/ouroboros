@@ -107,6 +107,7 @@ def seed_all(seed: int):
 
 def pytorch_performance_mode():
     torch.backends.cuda.matmul.allow_tf32 = True
+    torch.backends.cudnn.benchmark = True
 
 def pytorch_deterministic_mode():
     torch.backends.cudnn.deterministic = True

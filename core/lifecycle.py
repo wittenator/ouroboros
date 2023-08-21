@@ -68,7 +68,7 @@ class ClassificationModelTrainer(ModelTrainer):
             device: Union[str, torch.device],
             dataset: torch.utils.data.Dataset,  # type: ignore
             batch_size: int,
-            learning_rate: float = 0.002,
+            learning_rate: float = 0.0005,
             number_of_classes: int = 10,
             ) -> None:
         """Initializes a new ReconstructionBasedAnomalyDetectionModelTrainer instance.
@@ -110,7 +110,8 @@ class ClassificationModelTrainer(ModelTrainer):
         # Creates the optimizer for the training
         self.optimizer = optimizer(
             self.model.parameters(),
-            lr=self.learning_rate
+            lr=self.learning_rate,
+            weight_decay=0.1
         )
 
     def train_for_one_epoch(self) -> float:
@@ -129,7 +130,7 @@ class ClassificationModelTrainer(ModelTrainer):
         for inputs, classes in self.training_data_loader:
 
             # Resets the gradients of the optimizer (otherwise the gradients would accumulate)
-            self.optimizer.zero_grad()
+            self.optimizer.zero_grad(set_to_none=True)
 
             # Moves the inputs to the selected device
             inputs = inputs.to(self.device, non_blocking=True)

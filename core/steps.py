@@ -133,18 +133,20 @@ def Train_and_Aggregate(
     target.model.load_state_dict(temp_model.state_dict())
 
 def Create_Differential_Update(source, target):
-    source_weights = {key : value for key, value in source.model.named_parameters()}
-    for target_model in target:
-        target_weights = {key : value for key, value in target_model.model.named_parameters()}
-        for name in target_weights.keys():
-            target_weights[name].data = (target_weights[name].detach() - source_weights[name].detach()).clone()
+    with torch.no_grad():
+        source_weights = {key : value for key, value in source.model.named_parameters()}
+        for target_model in target:
+            target_weights = {key : value for key, value in target_model.model.named_parameters()}
+            for name in target_weights.keys():
+                target_weights[name].data = (target_weights[name].detach() - source_weights[name].detach()).clone()
 
 def Restore_Differential_Update(source, target):
-    source_weights = {key : value for key, value in source.model.named_parameters()}
-    for target_model in target:
-        target_weights = {key : value for key, value in target_model.model.named_parameters()}
-        for name in target_weights.keys():
-            target_weights[name].data = (target_weights[name].detach() + source_weights[name].detach()).clone()
+    with torch.no_grad():
+        source_weights = {key : value for key, value in source.model.named_parameters()}
+        for target_model in target:
+            target_weights = {key : value for key, value in target_model.model.named_parameters()}
+            for name in target_weights.keys():
+                target_weights[name].data = (target_weights[name].detach() + source_weights[name].detach()).clone()
 
 
 
